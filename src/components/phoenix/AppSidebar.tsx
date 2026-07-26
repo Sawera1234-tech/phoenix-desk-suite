@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   LayoutDashboard,
   Package,
@@ -9,115 +8,143 @@ import {
   Store,
   BarChart3,
   Settings,
-  ChevronLeft,
   Flame,
+  LifeBuoy,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const nav = [
-  { title: "Dashboard", icon: LayoutDashboard, active: true },
-  { title: "Products", icon: Package },
+const workspace = [
+  { title: "Dashboard", icon: LayoutDashboard, active: true, shortcut: "G D" },
+  { title: "Products", icon: Package, badge: "2,486" },
   { title: "Suppliers", icon: Truck },
-  { title: "Purchases", icon: ShoppingCart },
+  { title: "Purchases", icon: ShoppingCart, badge: "4" },
   { title: "Daily Usage", icon: ClipboardList },
+];
+
+const operations = [
   { title: "Market Ledger", icon: BookOpen },
   { title: "Wholesale", icon: Store },
   { title: "Reports", icon: BarChart3 },
   { title: "Settings", icon: Settings },
 ];
 
-export function AppSidebar({
-  collapsed,
-  onToggle,
-}: {
-  collapsed: boolean;
-  onToggle: () => void;
-}) {
+function NavItem({ item }: { item: (typeof workspace)[number] }) {
+  const Icon = item.icon;
   return (
-    <aside
+    <button
       className={cn(
-        "relative flex flex-col bg-sidebar text-sidebar-foreground transition-[width] duration-200 ease-out",
-        collapsed ? "w-[72px]" : "w-[248px]",
+        "group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors",
+        item.active
+          ? "bg-sidebar-accent text-white"
+          : "text-sidebar-foreground/75 hover:bg-sidebar-accent/50 hover:text-white",
       )}
     >
-      {/* Brand */}
-      <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-4">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground shadow-elevated">
-          <Flame className="h-5 w-5" />
-        </div>
-        {!collapsed && (
-          <div className="flex min-w-0 flex-col">
-            <span className="truncate text-sm font-semibold text-white">Project Phoenix</span>
-            <span className="truncate text-[11px] font-medium text-sidebar-foreground/60">
-              Wholesale ERP v2.4
-            </span>
-          </div>
+      <Icon
+        className={cn(
+          "h-[17px] w-[17px] shrink-0",
+          item.active ? "text-sidebar-primary" : "text-sidebar-foreground/60 group-hover:text-white",
         )}
+      />
+      <span className="flex-1 truncate text-left">{item.title}</span>
+      {item.badge && (
+        <span
+          className={cn(
+            "rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
+            item.active
+              ? "bg-white/15 text-white"
+              : "bg-sidebar-accent/70 text-sidebar-foreground/80",
+          )}
+        >
+          {item.badge}
+        </span>
+      )}
+      {!item.badge && item.shortcut && (
+        <span className="rounded border border-sidebar-border/60 px-1 py-px font-mono text-[9px] font-semibold text-sidebar-foreground/50">
+          {item.shortcut}
+        </span>
+      )}
+    </button>
+  );
+}
+
+export function AppSidebar() {
+  return (
+    <aside className="flex h-full w-[280px] shrink-0 flex-col bg-sidebar text-sidebar-foreground">
+      {/* Brand */}
+      <div className="flex h-[72px] items-center gap-3 border-b border-sidebar-border px-5">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+          <Flame className="h-[18px] w-[18px]" />
+        </div>
+        <div className="flex min-w-0 flex-col">
+          <span className="truncate text-[14px] font-semibold text-white">Project Phoenix</span>
+          <span className="truncate text-[11px] font-medium text-sidebar-foreground/55">
+            Wholesale ERP · v2.4.1
+          </span>
+        </div>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
-        {!collapsed && (
-          <div className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
-            Workspace
+      <nav className="flex-1 overflow-y-auto px-3 py-4">
+        <div className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-foreground/40">
+          Workspace
+        </div>
+        <div className="space-y-0.5">
+          {workspace.map((item) => (
+            <NavItem key={item.title} item={item} />
+          ))}
+        </div>
+
+        <div className="mt-6 px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-foreground/40">
+          Operations
+        </div>
+        <div className="space-y-0.5">
+          {operations.map((item) => (
+            <NavItem key={item.title} item={item} />
+          ))}
+        </div>
+
+        {/* Storage widget */}
+        <div className="mx-1 mt-6 rounded-xl border border-sidebar-border/60 bg-sidebar-accent/30 p-3">
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="font-semibold text-white">Storage</span>
+            <span className="tabular-nums text-sidebar-foreground/60">64%</span>
           </div>
-        )}
-        {nav.map((item) => {
-          const Icon = item.icon;
-          return (
-            <button
-              key={item.title}
-              className={cn(
-                "group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                item.active
-                  ? "bg-sidebar-accent text-white shadow-[inset_2px_0_0_0_var(--sidebar-primary)]"
-                  : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-white",
-                collapsed && "justify-center px-0",
-              )}
-              title={collapsed ? item.title : undefined}
-            >
-              <Icon className={cn("h-[18px] w-[18px] shrink-0", item.active && "text-sidebar-primary")} />
-              {!collapsed && <span className="truncate">{item.title}</span>}
-              {!collapsed && item.title === "Purchases" && (
-                <span className="ml-auto rounded-md bg-sidebar-primary/20 px-1.5 py-0.5 text-[10px] font-semibold text-sidebar-primary-foreground">
-                  4
-                </span>
-              )}
-            </button>
-          );
-        })}
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-sidebar-border/50">
+            <div className="h-full rounded-full bg-sidebar-primary" style={{ width: "64%" }} />
+          </div>
+          <p className="mt-2 text-[10.5px] leading-relaxed text-sidebar-foreground/55">
+            12.8 GB of 20 GB used across invoices, media and reports.
+          </p>
+        </div>
       </nav>
 
-      {/* Footer / user */}
-      <div className={cn("border-t border-sidebar-border p-3", collapsed && "px-2")}>
-        <div
-          className={cn(
-            "flex items-center gap-3 rounded-lg p-2",
-            collapsed ? "justify-center" : "bg-sidebar-accent/40",
-          )}
-        >
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sidebar-primary to-primary text-xs font-semibold text-white">
+      {/* Footer */}
+      <div className="border-t border-sidebar-border p-3">
+        <div className="flex items-center gap-3 rounded-lg bg-sidebar-accent/40 p-2.5">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sidebar-primary text-[11px] font-semibold text-white">
             AR
           </div>
-          {!collapsed && (
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-xs font-semibold text-white">Ahsan Raza</div>
-              <div className="truncate text-[11px] text-sidebar-foreground/60">Administrator</div>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[12px] font-semibold text-white">Ahsan Raza</div>
+            <div className="truncate text-[10.5px] text-sidebar-foreground/55">
+              admin@razamobile.pk
             </div>
-          )}
+          </div>
+          <button
+            className="rounded-md p-1.5 text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-white"
+            aria-label="Help"
+          >
+            <LifeBuoy className="h-4 w-4" />
+          </button>
+          <button
+            className="rounded-md p-1.5 text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-white"
+            aria-label="Sign out"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
         </div>
       </div>
-
-      {/* Collapse toggle */}
-      <button
-        onClick={onToggle}
-        className="absolute -right-3 top-20 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-elevated transition-colors hover:text-primary"
-        aria-label="Toggle sidebar"
-      >
-        <ChevronLeft
-          className={cn("h-3.5 w-3.5 transition-transform", collapsed && "rotate-180")}
-        />
-      </button>
     </aside>
   );
 }

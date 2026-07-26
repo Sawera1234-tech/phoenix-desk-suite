@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
 import { AppSidebar } from "@/components/phoenix/AppSidebar";
 import { TopHeader } from "@/components/phoenix/TopHeader";
 import { Dashboard } from "@/components/phoenix/Dashboard";
@@ -24,10 +23,9 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
-  const [collapsed, setCollapsed] = useState(false);
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
-      <AppSidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
+      <AppSidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopHeader />
         <main className="flex-1 overflow-y-auto">
