@@ -17,8 +17,7 @@ type OAuthClient = {
   denyAuthorization: (id: string) => Promise<{ data: OAuthDetails | null; error: Error | null }>;
 };
 function oauth(): OAuthClient {
-  // @ts-expect-error beta namespace
-  return supabase.auth.oauth;
+  return (supabase.auth as unknown as { oauth: OAuthClient }).oauth;
 }
 
 export const Route = createFileRoute("/.lovable/oauth/consent")({
