@@ -11,31 +11,41 @@ import {
   Flame,
   LifeBuoy,
   LogOut,
+  Tag,
+  Layers,
 } from "lucide-react";
+import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { useEffect, useState } from "react";
 
-const workspace = [
-  { title: "Dashboard", icon: LayoutDashboard, active: true, shortcut: "G D" },
-  { title: "Products", icon: Package, badge: "2,486" },
-  { title: "Suppliers", icon: Truck },
-  { title: "Purchases", icon: ShoppingCart, badge: "4" },
-  { title: "Daily Usage", icon: ClipboardList },
+type Item = { title: string; icon: typeof LayoutDashboard; to: string; shortcut?: string };
+
+const workspace: Item[] = [
+  { title: "Dashboard", icon: LayoutDashboard, to: "/", shortcut: "G D" },
+  { title: "Products", icon: Package, to: "/products" },
+  { title: "Categories", icon: Layers, to: "/categories" },
+  { title: "Brands", icon: Tag, to: "/brands" },
+  { title: "Suppliers", icon: Truck, to: "/suppliers" },
+  { title: "Purchases", icon: ShoppingCart, to: "/purchases" },
+  { title: "Daily Usage", icon: ClipboardList, to: "/daily-usage" },
 ];
 
-const operations = [
-  { title: "Market Ledger", icon: BookOpen },
-  { title: "Wholesale", icon: Store },
-  { title: "Reports", icon: BarChart3 },
-  { title: "Settings", icon: Settings },
+const operations: Item[] = [
+  { title: "Market Ledger", icon: BookOpen, to: "/shopkeepers" },
+  { title: "Wholesale", icon: Store, to: "/wholesale" },
+  { title: "Reports", icon: BarChart3, to: "/reports" },
+  { title: "Settings", icon: Settings, to: "/settings" },
 ];
 
-function NavItem({ item }: { item: (typeof workspace)[number] }) {
+function NavItem({ item, active }: { item: Item; active: boolean }) {
   const Icon = item.icon;
   return (
-    <button
+    <Link
+      to={item.to}
       className={cn(
         "group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors",
-        item.active
+        active
           ? "bg-sidebar-accent text-white"
           : "text-sidebar-foreground/75 hover:bg-sidebar-accent/50 hover:text-white",
       )}
@@ -43,35 +53,48 @@ function NavItem({ item }: { item: (typeof workspace)[number] }) {
       <Icon
         className={cn(
           "h-[17px] w-[17px] shrink-0",
-          item.active ? "text-sidebar-primary" : "text-sidebar-foreground/60 group-hover:text-white",
+          active ? "text-sidebar-primary" : "text-sidebar-foreground/60 group-hover:text-white",
         )}
       />
       <span className="flex-1 truncate text-left">{item.title}</span>
-      {item.badge && (
-        <span
-          className={cn(
-            "rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
-            item.active
-              ? "bg-white/15 text-white"
-              : "bg-sidebar-accent/70 text-sidebar-foreground/80",
-          )}
-        >
-          {item.badge}
-        </span>
-      )}
-      {!item.badge && item.shortcut && (
+      {item.shortcut && (
         <span className="rounded border border-sidebar-border/60 px-1 py-px font-mono text-[9px] font-semibold text-sidebar-foreground/50">
           {item.shortcut}
         </span>
       )}
-    </button>
+    </Link>
   );
 }
 
 export function AppSidebar() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const navigate = useNavigate();
+  const [email, setEmail] = useState<string>("");
+  const [name, setName] = useState<string>("");
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setEmail(data.user?.email ?? "");
+      setName((data.user?.user_metadata as { full_name?: string })?.full_name || (data.user?.email?.split("@")[0] ?? ""));
+    });
+  }, []);
+
+  const initials = (name || email || "U")
+    .split(/[\s@.]/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((s) => s[0]?.toUpperCase())
+    .join("") || "U";
+
+  async function signOut() {
+    await supabase.auth.signOut();
+    navigate({ to: "/login" });
+  }
+
+  const isActive = (to: string) => (to === "/" ? pathname === "/" : pathname.startsWith(to));
+
   return (
     <aside className="flex h-full w-[280px] shrink-0 flex-col bg-sidebar text-sidebar-foreground">
-      {/* Brand */}
       <div className="flex h-[72px] items-center gap-3 border-b border-sidebar-border px-5">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
           <Flame className="h-[18px] w-[18px]" />
@@ -79,19 +102,18 @@ export function AppSidebar() {
         <div className="flex min-w-0 flex-col">
           <span className="truncate text-[14px] font-semibold text-white">Project Phoenix</span>
           <span className="truncate text-[11px] font-medium text-sidebar-foreground/55">
-            Wholesale ERP · v2.4.1
+            Wholesale ERP · v3.0
           </span>
         </div>
       </div>
 
-      {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-3 py-4">
         <div className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-foreground/40">
           Workspace
         </div>
         <div className="space-y-0.5">
           {workspace.map((item) => (
-            <NavItem key={item.title} item={item} />
+            <NavItem key={item.to} item={item} active={isActive(item.to)} />
           ))}
         </div>
 
@@ -100,36 +122,19 @@ export function AppSidebar() {
         </div>
         <div className="space-y-0.5">
           {operations.map((item) => (
-            <NavItem key={item.title} item={item} />
+            <NavItem key={item.to} item={item} active={isActive(item.to)} />
           ))}
-        </div>
-
-        {/* Storage widget */}
-        <div className="mx-1 mt-6 rounded-xl border border-sidebar-border/60 bg-sidebar-accent/30 p-3">
-          <div className="flex items-center justify-between text-[11px]">
-            <span className="font-semibold text-white">Storage</span>
-            <span className="tabular-nums text-sidebar-foreground/60">64%</span>
-          </div>
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-sidebar-border/50">
-            <div className="h-full rounded-full bg-sidebar-primary" style={{ width: "64%" }} />
-          </div>
-          <p className="mt-2 text-[10.5px] leading-relaxed text-sidebar-foreground/55">
-            12.8 GB of 20 GB used across invoices, media and reports.
-          </p>
         </div>
       </nav>
 
-      {/* Footer */}
       <div className="border-t border-sidebar-border p-3">
         <div className="flex items-center gap-3 rounded-lg bg-sidebar-accent/40 p-2.5">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sidebar-primary text-[11px] font-semibold text-white">
-            AR
+            {initials}
           </div>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[12px] font-semibold text-white">Ahsan Raza</div>
-            <div className="truncate text-[10.5px] text-sidebar-foreground/55">
-              admin@razamobile.pk
-            </div>
+            <div className="truncate text-[12px] font-semibold text-white">{name || "User"}</div>
+            <div className="truncate text-[10.5px] text-sidebar-foreground/55">{email}</div>
           </div>
           <button
             className="rounded-md p-1.5 text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-white"
@@ -138,6 +143,7 @@ export function AppSidebar() {
             <LifeBuoy className="h-4 w-4" />
           </button>
           <button
+            onClick={signOut}
             className="rounded-md p-1.5 text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-white"
             aria-label="Sign out"
           >
