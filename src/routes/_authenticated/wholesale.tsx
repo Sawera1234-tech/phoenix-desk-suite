@@ -1,1215 +1,356 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-
-import { AppShell } from "@/components/phoenix/AppShell";
-import { DataTable } from "@/components/phoenix/DataTable";
-import { fmtRs, fmtDate } from "@/lib/format";
-import { supabase } from "@/integrations/supabase/client";
-
-import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-
-import { toast } from "sonner";
-
-import {
-  Plus,
-  Trash2,
+  Copy,
   Eye,
+  FileText,
   Pencil,
-  Printer
+  Plus,
+  Printer,
+  RefreshCw,
+  Search,
+  Trash2,
+  Wallet,
 } from "lucide-react";
-
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { StatCard } from "@/components/phoenix/StatCard";
+import { DeleteInvoiceDialog } from "@/components/wholesale/DeleteInvoiceDialog";
+import { EditInvoiceDialog } from "@/components/wholesale/EditInvoiceDialog";
+import { InvoiceStatusBadge } from "@/components/wholesale/InvoiceStatusBadge";
+import { NewInvoiceDialog } from "@/components/wholesale/NewInvoiceDialog";
+import { printThermalReceipt } from "@/components/wholesale/ThermalReceipt";
+import { ViewInvoiceDialog } from "@/components/wholesale/ViewInvoiceDialog";
+import {
+  calcRemaining,
+  draftLinesFromItems,
+  fetchInvoiceWithItems,
+  fetchInvoices,
+  fetchWholesaleStats,
+  fmtRs,
+  wholesaleKeys,
+  type Invoice,
+  type InvoiceFormData,
+} from "@/lib/wholesale";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/wholesale")({
   head: () => ({
-    meta: [{ title: "Wholesale · Project Phoenix" }]
+    meta: [
+      { title: "Wholesale · Project Phoenix ERP" },
+      {
+        name: "description",
+        content: "Manage wholesale invoices — create, edit, view, print and track outstanding balances.",
+      },
+    ],
   }),
   component: WholesalePage,
 });
 
+type DialogState =
+  | { type: "none" }
+  | { type: "new" }
+  | { type: "edit"; id: string }
+  | { type: "view"; id: string }
+  | { type: "delete"; id: string; number: string }
+  | { type: "duplicate"; data: Partial<InvoiceFormData> };
 
+function WholesalePage() {
+  const [search, setSearch] = useState("");
+  const [dialog, setDialog] = useState<DialogState>({ type: "none" });
 
-type Invoice = {
-  id: string;
-  invoice_no: string;
-  invoice_date: string;
-  status: string;
-  total: number;
-  amount_paid: number;
-  customer_name: string | null;
-  shopkeeper: {
-    name:string
-  } | null;
-};
+  const {
+    data: invoices = [],
+    isLoading,
+    isError,
+    refetch,
+    isFetching,
+  } = useQuery({
+    queryKey: wholesaleKeys.invoices(),
+    queryFn: fetchInvoices,
+  });
 
+  const { data: stats } = useQuery({
+    queryKey: wholesaleKeys.stats(),
+    queryFn: fetchWholesaleStats,
+  });
 
+  const duplicateMutation = useMutation({
+    mutationFn: (id: string) => fetchInvoiceWithItems(id),
+    onSuccess: (invoice) => {
+      const duplicateData: Partial<InvoiceFormData> = {
+        shopkeeper_id: invoice.shopkeeper_id,
+        invoice_date: new Date().toISOString().slice(0, 10),
+        paid: 0,
+        notes: invoice.notes ?? "",
+        lines: draftLinesFromItems(invoice.invoice_items),
+      };
+      setDialog({ type: "duplicate", data: duplicateData });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to load invoice for duplication");
+    },
+  });
 
-function WholesalePage(){
+  const printMutation = useMutation({
+    mutationFn: (id: string) => fetchInvoiceWithItems(id),
+    onSuccess: (invoice) => {
+      printThermalReceipt(invoice);
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to load invoice for printing");
+    },
+  });
 
-const qc = useQueryClient();
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    if (!q) return invoices;
+    return invoices.filter(
+      (inv) =>
+        inv.invoice_number.toLowerCase().includes(q) ||
+        inv.shopkeepers?.name?.toLowerCase().includes(q) ||
+        inv.status.toLowerCase().includes(q),
+    );
+  }, [invoices, search]);
 
+  function closeDialog() {
+    setDialog({ type: "none" });
+  }
 
-const [selectedInvoice,setSelectedInvoice] =
-useState<Invoice | null>(null);
+  return (
+    <div className="mx-auto flex max-w-[1720px] flex-col gap-6 p-8">
+      {/* Header */}
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-[22px] font-semibold tracking-tight text-foreground">Wholesale</h1>
+          <p className="mt-1 text-[13px] text-muted-foreground">
+            Invoice management — create, edit, print thermal receipts, and track balances.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refetch()}
+            disabled={isFetching}
+          >
+            <RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} />
+            Refresh
+          </Button>
+          <Button onClick={() => setDialog({ type: "new" })}>
+            <Plus className="h-4 w-4" />
+            New Invoice
+          </Button>
+        </div>
+      </div>
 
+      {/* Stats */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Total Invoices"
+          value={String(stats?.totalInvoices ?? invoices.length)}
+          sub="All time"
+          icon={FileText}
+          tone="primary"
+        />
+        <StatCard
+          label="Today's Sales"
+          value={fmtRs(stats?.todaySales ?? 0)}
+          sub="Invoices today"
+          icon={Wallet}
+          tone="success"
+        />
+        <StatCard
+          label="Outstanding Balance"
+          value={fmtRs(stats?.outstandingBalance ?? 0)}
+          sub="Total - Paid"
+          icon={Wallet}
+          tone="warning"
+        />
+        <StatCard
+          label="Partial Payments"
+          value={String(stats?.partialCount ?? 0)}
+          sub="Awaiting balance"
+          icon={FileText}
+          tone="destructive"
+        />
+      </div>
 
-const [viewOpen,setViewOpen] =
-useState(false);
+      {/* Invoice table */}
+      <section className="flex flex-col rounded-2xl border border-border bg-card shadow-card">
+        <header className="flex flex-wrap items-center justify-between gap-4 border-b border-border px-6 py-4">
+          <div>
+            <h2 className="text-[14px] font-semibold text-foreground">Invoices</h2>
+            <p className="text-[12px] text-muted-foreground">
+              {filtered.length} invoice{filtered.length !== 1 ? "s" : ""}
+            </p>
+          </div>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search invoice, customer, status…"
+              className="h-8 w-64 pl-8 text-[12px]"
+            />
+          </div>
+        </header>
 
+        <div className="overflow-x-auto">
+          {isLoading ? (
+            <div className="px-6 py-16 text-center text-sm text-muted-foreground">
+              Loading invoices…
+            </div>
+          ) : isError ? (
+            <div className="px-6 py-16 text-center text-sm text-destructive">
+              Failed to load invoices. Check your Supabase connection.
+            </div>
+          ) : (
+            <table className="w-full min-w-[900px] border-separate border-spacing-0 text-[13px]">
+              <thead className="bg-muted/70 text-[11px] uppercase tracking-wide text-muted-foreground">
+                <tr>
+                  <th className="h-9 px-4 text-left font-semibold">Invoice #</th>
+                  <th className="h-9 px-4 text-left font-semibold">Date</th>
+                  <th className="h-9 px-4 text-left font-semibold">Customer</th>
+                  <th className="h-9 px-4 text-right font-semibold">Total</th>
+                  <th className="h-9 px-4 text-right font-semibold">Paid</th>
+                  <th className="h-9 px-4 text-right font-semibold">Remaining</th>
+                  <th className="h-9 px-4 text-left font-semibold">Status</th>
+                  <th className="h-9 px-4 text-right font-semibold">Actions</th>
+                </tr>
+                <tr>
+                  <th colSpan={8} className="h-px bg-border p-0" />
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((inv, i) => (
+                  <InvoiceRow
+                    key={inv.id}
+                    invoice={inv}
+                    striped={i % 2 === 1}
+                    onView={() => setDialog({ type: "view", id: inv.id })}
+                    onEdit={() => setDialog({ type: "edit", id: inv.id })}
+                    onPrint={() => printMutation.mutate(inv.id)}
+                    onDelete={() =>
+                      setDialog({ type: "delete", id: inv.id, number: inv.invoice_number })
+                    }
+                    onDuplicate={() => duplicateMutation.mutate(inv.id)}
+                    isPrinting={printMutation.isPending && printMutation.variables === inv.id}
+                  />
+                ))}
+                {filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">
+                      {search ? "No invoices match your search." : "No invoices yet. Create your first invoice."}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </section>
 
+      {/* Dialogs */}
+      <NewInvoiceDialog
+        open={dialog.type === "new" || dialog.type === "duplicate"}
+        onOpenChange={(open) => !open && closeDialog()}
+        initialData={dialog.type === "duplicate" ? dialog.data : undefined}
+      />
 
-const [editOpen,setEditOpen] =
-useState(false);
+      <EditInvoiceDialog
+        invoiceId={dialog.type === "edit" ? dialog.id : null}
+        open={dialog.type === "edit"}
+        onOpenChange={(open) => !open && closeDialog()}
+      />
 
+      <ViewInvoiceDialog
+        invoiceId={dialog.type === "view" ? dialog.id : null}
+        open={dialog.type === "view"}
+        onOpenChange={(open) => !open && closeDialog()}
+      />
 
-
-
-
-const {data=[]}=useQuery({
-
-queryKey:["invoices"],
-
-queryFn:async()=>{
-
-
-const {data,error}=await supabase
-.from("invoices")
-.select(`
-id,
-invoice_no,
-invoice_date,
-status,
-total,
-amount_paid,
-customer_name,
-shopkeeper:shopkeepers(name)
-`)
-.order("invoice_date",{ascending:false});
-
-
-if(error) throw error;
-
-
-return data as unknown as Invoice[];
-
-
+      <DeleteInvoiceDialog
+        invoiceId={dialog.type === "delete" ? dialog.id : null}
+        invoiceNumber={dialog.type === "delete" ? dialog.number : ""}
+        open={dialog.type === "delete"}
+        onOpenChange={(open) => !open && closeDialog()}
+      />
+    </div>
+  );
 }
 
-});
-
-
-
-
-
-
-const flat = useMemo(()=>
-
-
-data.map((r)=>({
-
-...r,
-
-buyer:
-r.shopkeeper?.name ??
-r.customer_name ??
-"Walk-in"
-
-})),
-
-[data]
-
-);
-
-
-
-
-
-
-const deleteInvoice = useMutation({
-
-mutationFn:async(id:string)=>{
-
-
-// delete items first
-
-const {error:itemError}=await supabase
-.from("invoice_items")
-.delete()
-.eq("invoice_id",id);
-
-
-if(itemError)
-throw itemError;
-
-
-
-const {error}=await supabase
-.from("invoices")
-.delete()
-.eq("id",id);
-
-
-
-if(error)
-throw error;
-
-
-
-},
-
-
-onSuccess:()=>{
-
-
-toast.success("Invoice deleted");
-
-
-qc.invalidateQueries({
-queryKey:["invoices"]
-});
-
-
-},
-
-
-onError:()=>{
-
-toast.error("Delete failed");
-
-}
-
-});
-
-
-
-
-
-
-const printInvoice=(invoice:Invoice)=>{
-
-
-setSelectedInvoice(invoice);
-
-
-// temporary thermal print
-
-setTimeout(()=>{
-
-window.print();
-
-},300);
-
-
-};
-
-
-
-
-
-
-
-
-return (
-
-<AppShell
-title="Wholesale"
-subtitle="Invoicing & Sales"
->
-
-
-<div className="mx-auto max-w-[1600px] space-y-4 p-6 xl:p-8">
-
-
-
-<DataTable
-
-rows={flat}
-
-rowKey={(r)=>r.id}
-
-searchKeys={[
-"invoice_no",
-"buyer"
-]}
-
-searchPlaceholder="Search invoice or customer…"
-
-
-
-initialSort={{
-key:"invoice_date",
-dir:"desc"
-}}
-
-
-
-actions={
-
-<NewInvoiceDialog
-
-onCreated={()=>{
-
-qc.invalidateQueries({
-queryKey:["invoices"]
-});
-
-
-qc.invalidateQueries({
-queryKey:["dashboard-stats"]
-});
-
-
-}}
-
-/>
-
-}
-
-
-
-
-emptyMessage="No invoices yet."
-
-
-
-columns={[
-
-
-
-{
-key:"invoice_no",
-
-label:"Invoice #",
-
-render:(r)=>(
-
-<span className="font-mono text-[12px] font-semibold">
-
-{r.invoice_no}
-
-</span>
-
-)
-
-},
-
-
-
-{
-key:"buyer",
-
-label:"Customer"
-
-},
-
-
-
-{
-key:"invoice_date",
-
-label:"Date",
-
-align:"right",
-
-render:(r)=>fmtDate(r.invoice_date)
-
-},
-
-
-
-
-{
-key:"total",
-
-label:"Total",
-
-align:"right",
-
-render:(r)=>
-
-<span className="font-semibold">
-
-{fmtRs(r.total)}
-
-</span>
-
-
-},
-
-
-
-
-{
-key:"amount_paid",
-
-label:"Paid",
-
-align:"right",
-
-render:(r)=>
-
-fmtRs(r.amount_paid)
-
-},
-
-
-
-
-
-
-{
-key:"status",
-
-label:"Status",
-
-render:(r)=>(
-
-
-<span
-className={`
-rounded-md px-2 py-0.5 text-[11px] font-semibold capitalize
-
-${
-r.status==="paid"
-?
-"bg-success-soft text-success"
-
-:
-
-r.status==="partial"
-
-?
-"bg-warning-soft text-warning"
-
-:
-
-r.status==="credit"
-
-?
-"bg-primary-soft text-primary"
-
-:
-"bg-muted text-muted-foreground"
-
-}
-
-`}
->
-
-{r.status}
-
-</span>
-
-
-)
-
-},
-
-
-
-
-
-
-{
-key:"actions",
-
-label:"Actions",
-
-render:(r)=>(
-
-
-<div className="flex gap-2">
-
-
-
-<Button
-
-size="icon"
-
-variant="outline"
-
-onClick={()=>{
-
-setSelectedInvoice(r);
-
-setViewOpen(true);
-
-}}
-
->
-
-<Eye size={16}/>
-
-</Button>
-
-
-
-
-
-
-<Button
-
-size="icon"
-
-variant="outline"
-
-onClick={()=>{
-
-setSelectedInvoice(r);
-
-setEditOpen(true);
-
-}}
-
->
-
-<Pencil size={16}/>
-
-</Button>
-
-
-
-
-
-
-<Button
-
-size="icon"
-
-variant="outline"
-
-onClick={()=>printInvoice(r)}
-
->
-
-<Printer size={16}/>
-
-</Button>
-
-
-
-
-
-
-
-<Button
-
-size="icon"
-
-variant="destructive"
-
-onClick={()=>{
-
-
-if(
-confirm("Delete this invoice?")
-)
-
-deleteInvoice.mutate(r.id);
-
-
-}}
-
->
-
-<Trash2 size={16}/>
-
-</Button>
-
-
-
-
-</div>
-
-
-)
-
-}
-
-
-
-]}
-
-
-/>
-
-
-
-</div>
-
-
-
-
-
-<ViewInvoiceDialog
-
-invoice={selectedInvoice}
-
-open={viewOpen}
-
-setOpen={setViewOpen}
-
-/>
-
-
-
-
-
-</AppShell>
-
-);
-
-}
-
-
-
-
-
-
-
-function ViewInvoiceDialog({
-
-invoice,
-
-open,
-
-setOpen
-
-}:{
-
-invoice:Invoice|null;
-
-open:boolean;
-
-setOpen:(v:boolean)=>void;
-
-}){
-
-
-if(!invoice)
-return null;
-
-
-
-return (
-
-<Dialog open={open} onOpenChange={setOpen}>
-
-
-<DialogContent>
-
-
-<DialogHeader>
-
-<DialogTitle>
-
-Invoice Details
-
-</DialogTitle>
-
-</DialogHeader>
-
-
-
-<div className="space-y-3">
-
-
-<p>
-Invoice:
-<b> {invoice.invoice_no}</b>
-</p>
-
-
-<p>
-Customer:
-<b>
-{
-invoice.shopkeeper?.name ??
-invoice.customer_name ??
-"Walk-in"
-}
-</b>
-</p>
-
-
-<p>
-Total:
-<b>
-{fmtRs(invoice.total)}
-</b>
-</p>
-
-
-<p>
-Paid:
-<b>
-{fmtRs(invoice.amount_paid)}
-</b>
-</p>
-
-
-<p>
-Status:
-<b>
-{invoice.status}
-</b>
-</p>
-
-
-
-</div>
-
-
-
-<DialogFooter>
-
-<Button onClick={()=>setOpen(false)}>
-Close
-</Button>
-
-</DialogFooter>
-
-
-</DialogContent>
-
-
-</Dialog>
-
-);
-
-}type LineItem = {
-  product_id:string;
-  quantity:string;
-  unit_price:string;
-};
-
-
-
-function EditInvoiceDialog({
-
-invoice,
-
-open,
-
-setOpen,
-
-onUpdated
-
-}:{
-
-invoice:Invoice|null;
-
-open:boolean;
-
-setOpen:(v:boolean)=>void;
-
-onUpdated:()=>void;
-
-}){
-
-
-const [amountPaid,setAmountPaid]=useState("");
-
-const [items,setItems]=useState<LineItem[]>([]);
-
-
-
-const products = useQuery({
-
-queryKey:["products-select-edit"],
-
-queryFn:async()=>{
-
-const {data,error}=await supabase
-.from("products")
-.select(`
-id,
-code,
-name,
-wholesale_price
-`)
-.eq("is_active",true)
-.order("name");
-
-
-if(error) throw error;
-
-return data ?? [];
-
-},
-
-enabled:open
-
-});
-
-
-
-
-
-useQuery({
-
-queryKey:["invoice-items",invoice?.id],
-
-enabled:!!invoice && open,
-
-queryFn:async()=>{
-
-
-const {data,error}=await supabase
-
-.from("invoice_items")
-
-.select(`
-product_id,
-quantity,
-unit_price
-`)
-
-.eq("invoice_id",invoice!.id);
-
-
-
-if(error) throw error;
-
-
-setItems(
-
-(data ?? []).map((i)=>({
-
-product_id:i.product_id,
-
-quantity:String(i.quantity),
-
-unit_price:String(i.unit_price)
-
-}))
-
-);
-
-
-setAmountPaid(
-String(invoice?.amount_paid ?? 0)
-);
-
-
-return data;
-
-
-}
-
-});
-
-
-
-
-
-const updateInvoice = useMutation({
-
-mutationFn:async()=>{
-
-
-if(!invoice)
-return;
-
-
-
-const subtotal = items.reduce(
-
-(sum,i)=>
-
-sum +
-
-Number(i.quantity)*Number(i.unit_price)
-
-,0);
-
-
-
-const paid=Number(amountPaid);
-
-
-
-const status =
-
-paid >= subtotal
-
-?
-
-"paid"
-
-:
-
-paid>0
-
-?
-
-"partial"
-
-:
-
-"credit";
-
-
-
-
-
-
-await supabase
-
-.from("invoices")
-
-.update({
-
-subtotal,
-
-total:subtotal,
-
-amount_paid:paid,
-
-status
-
-})
-
-.eq("id",invoice.id);
-
-
-
-
-
-await supabase
-
-.from("invoice_items")
-
-.delete()
-
-.eq("invoice_id",invoice.id);
-
-
-
-
-
-await supabase
-
-.from("invoice_items")
-
-.insert(
-
-items.map(i=>({
-
-invoice_id:invoice.id,
-
-product_id:i.product_id,
-
-quantity:Number(i.quantity),
-
-unit_price:Number(i.unit_price),
-
-subtotal:
-Number(i.quantity)*Number(i.unit_price)
-
-}))
-
-);
-
-
-
-
-
-},
-
-
-onSuccess:()=>{
-
-
-toast.success("Invoice updated");
-
-setOpen(false);
-
-onUpdated();
-
-
-},
-
-
-
-onError:()=>toast.error("Update failed")
-
-
-});
-
-
-
-
-
-if(!invoice)
-return null;
-
-
-
-return (
-
-<Dialog
-
-open={open}
-
-onOpenChange={setOpen}
-
->
-
-
-<DialogContent className="max-w-4xl">
-
-
-<DialogHeader>
-
-<DialogTitle>
-
-Edit Invoice {invoice.invoice_no}
-
-</DialogTitle>
-
-</DialogHeader>
-
-
-
-<div className="space-y-3">
-
-
-
-{items.map((item,index)=>(
-
-
-<div
-
-key={index}
-
-className="grid grid-cols-3 gap-3"
-
->
-
-
-<select
-
-className="border rounded p-2"
-
-value={item.product_id}
-
-onChange={(e)=>{
-
-setItems(prev=>
-
-prev.map((x,i)=>
-
-i===index
-
-?
-
-{
-...x,
-product_id:e.target.value
-}
-
-:
-
-x
-
-)
-
-)
-
-}}
-
->
-
-
-<option value="">
-
-Select Product
-
-</option>
-
-
-{products.data?.map(p=>(
-
-<option
-
-key={p.id}
-
-value={p.id}
-
->
-
-{p.code} - {p.name}
-
-</option>
-
-))}
-
-
-</select>
-
-
-
-
-<input
-
-className="border rounded p-2"
-
-type="number"
-
-value={item.quantity}
-
-onChange={(e)=>
-
-setItems(prev=>
-
-prev.map((x,i)=>
-
-i===index
-
-?
-
-{
-...x,
-quantity:e.target.value
-}
-
-:
-
-x
-
-)
-
-)
-
-}
-
-/>
-
-
-
-<input
-
-className="border rounded p-2"
-
-type="number"
-
-value={item.unit_price}
-
-onChange={(e)=>
-
-setItems(prev=>
-
-prev.map((x,i)=>
-
-i===index
-
-?
-
-{
-...x,
-unit_price:e.target.value
-}
-
-:
-
-x
-
-)
-
-)
-
-}
-
-/>
-
-
-
-</div>
-
-
-))}
-
-
-
-<Button
-
-variant="outline"
-
-onClick={()=>setItems(prev=>[
-
-...prev,
-
-{
-product_id:"",
-quantity:"1",
-unit_price:"0"
-}
-
-])}
-
->
-
-Add Item
-
-</Button>
-
-
-
-
-<Input
-
-type="number"
-
-placeholder="Paid Amount"
-
-value={amountPaid}
-
-onChange={(e)=>
-
-setAmountPaid(e.target.value)
-
-}
-
-/>
-
-
-
-</div>
-
-
-
-
-<DialogFooter>
-
-
-<Button
-
-onClick={()=>updateInvoice.mutate()}
-
->
-
-Save Changes
-
-</Button>
-
-
-</DialogFooter>
-
-
-</DialogContent>
-
-
-</Dialog>
-
-);
-
-
+function InvoiceRow({
+  invoice,
+  striped,
+  onView,
+  onEdit,
+  onPrint,
+  onDelete,
+  onDuplicate,
+  isPrinting,
+}: {
+  invoice: Invoice;
+  striped: boolean;
+  onView: () => void;
+  onEdit: () => void;
+  onPrint: () => void;
+  onDelete: () => void;
+  onDuplicate: () => void;
+  isPrinting: boolean;
+}) {
+  const remaining = calcRemaining(invoice.total, invoice.paid);
+
+  return (
+    <tr
+      className={cn(
+        "transition-colors hover:bg-primary-soft/40",
+        striped && "bg-muted/25",
+      )}
+    >
+      <td className="px-4 py-3 font-mono text-[12px] font-semibold">{invoice.invoice_number}</td>
+      <td className="px-4 py-3 text-muted-foreground">{invoice.invoice_date}</td>
+      <td className="px-4 py-3 font-medium">{invoice.shopkeepers?.name ?? "—"}</td>
+      <td className="px-4 py-3 text-right font-semibold tabular-nums">{fmtRs(invoice.total)}</td>
+      <td className="px-4 py-3 text-right tabular-nums text-success">{fmtRs(invoice.paid)}</td>
+      <td className="px-4 py-3 text-right tabular-nums text-warning">{fmtRs(remaining)}</td>
+      <td className="px-4 py-3">
+        <InvoiceStatusBadge status={invoice.status} />
+      </td>
+      <td className="px-4 py-3">
+        <div className="flex items-center justify-end gap-1">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onView} title="View">
+            <Eye className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onEdit} title="Edit">
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={onPrint}
+            disabled={isPrinting}
+            title="Print thermal receipt"
+          >
+            <Printer className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onDuplicate} title="Duplicate">
+            <Copy className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-destructive hover:text-destructive"
+            onClick={onDelete}
+            title="Delete"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </td>
+    </tr>
+  );
 }
