@@ -275,8 +275,9 @@ export async function printThermalReceipt(invoice: InvoiceWithItems) {
     * { margin: 0; padding: 0; box-sizing: border-box; }
    body{
       width:72mm;
-      margin:0;
-      padding:2mm;
+      margin:0 auto;
+      padding:2mm 3mm;
+      box-sizing:border-box;
       font-family:'Courier New', monospace;
       font-size:14px;
       font-weight:700;
@@ -300,12 +301,11 @@ export async function printThermalReceipt(invoice: InvoiceWithItems) {
     .info span:first-child { color: #000; font-weight: 700; }
     .header-row,
     .row{
-     display:grid;
-     grid-template-columns:1fr 24px 42px 46px;
-     align-items:start;
-     margin:3px 0;
-     font-size:12px;
-     column-gap:3px;
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 30px 50px 55px;
+    column-gap:3px;
+    align-items:start;
+    width:100%;
     }
     .header-row { font-weight: bold; border-bottom: 1px solid #000; padding-bottom: 3px; text-transform: uppercase; }
     .product{
