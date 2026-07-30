@@ -279,21 +279,25 @@ export async function printThermalReceipt(invoice: InvoiceWithItems) {
       padding:0;
       font-family:'Courier New', monospace;
       font-size:14px;
-      font-weight:bold;
+      font-weight:700;
       line-height:1.5;
       color:#000;
       background:#fff;
       -webkit-print-color-adjust:exact;
      print-color-adjust:exact;
     }
+     *{
+    font-weight:700 !important;
+    color:#000 !important;
+    }
     .center { text-align: center; }
     .shop-name { font-size: 15px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.3px; }
-    .info-line { font-size: 10.5px; color: #333; margin-top: 1px; }
+    .info-line { font-size: 13px; font-weight: 700; color: #000; margin-top: 2px; }
     .doc-title { font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1.5px; margin-top: 6px; }
     .divider { border-top: 1px dashed #000; margin: 8px 0; }
     .divider-solid { border-top: 1px solid #000; margin: 4px 0; }
-    .info { display: flex; justify-content: space-between; gap: 8px; margin: 2px 0; font-size: 13px; }
-    .info span:first-child { color: #444; }
+    .info { display: flex; justify-content: space-between; gap: 8px; margin: 3px 0; font-size: 13px; font-weight: 700; color: #000; }
+    .info span:first-child { color: #000; font-weight: 700; }
     .header-row,
     .row{
      display:grid;
@@ -308,9 +312,11 @@ export async function printThermalReceipt(invoice: InvoiceWithItems) {
     white-space:normal;
     word-break:break-word;
     overflow-wrap:anywhere;
+    font-weight:700;
+    color:#000;
     }
-    .qty { text-align:right; }
-    .price, .total { text-align:right; font-weight:bold; }
+    .qty { text-align:right; font-weight:700; color:#000; }
+    .price, .total { text-align:right; font-weight:700; color:#000; }
     .total { font-weight: 600; }
     .summary .info { margin: 3px 0; font-size: 11.5px; }
     .bold { font-weight: bold; }
