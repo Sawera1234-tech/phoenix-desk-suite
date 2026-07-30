@@ -326,12 +326,12 @@ export async function printThermalReceipt(invoice: InvoiceWithItems) {
     align-items:center;
     margin-top:6px;
     padding:6px 4px;
-    background:#000;
-    color:#fff !important;
+    border-top:2px solid #000;
+    border-bottom:2px solid #000;
     font-size:14px;
     font-weight:700;
-    -webkit-print-color-adjust:exact;
-    print-color-adjust:exact;
+    color:#000;
+    background:#fff;
    }
     .footer-note { text-align: center; font-size: 10.5px; color: #333; margin-bottom: 6px; white-space: pre-line; }
     .thank-you { text-align: center; font-weight: bold; font-size: 12px; margin-top: 4px; }
