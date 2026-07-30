@@ -273,18 +273,18 @@ export async function printThermalReceipt(invoice: InvoiceWithItems) {
   <style>
     @page { size: 80mm auto; margin: 3mm; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body{
-    width:72mm;
-    margin:0 auto;
-    padding:2mm;
-    font-family:Arial,Helvetica,sans-serif;
-    font-size:12px;
-    font-weight:600;
-    line-height:1.4;
-    color:#000;
-    background:#fff;
-    -webkit-print-color-adjust:exact;
-    print-color-adjust:exact;
+   body{
+      width:80mm;
+      margin:0;
+      padding:0;
+      font-family:'Courier New', monospace;
+      font-size:14px;
+      font-weight:bold;
+      line-height:1.5;
+      color:#000;
+      background:#fff;
+      -webkit-print-color-adjust:exact;
+     print-color-adjust:exact;
     }
     .center { text-align: center; }
     .shop-name { font-size: 15px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.3px; }
@@ -292,12 +292,12 @@ export async function printThermalReceipt(invoice: InvoiceWithItems) {
     .doc-title { font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1.5px; margin-top: 6px; }
     .divider { border-top: 1px dashed #000; margin: 8px 0; }
     .divider-solid { border-top: 1px solid #000; margin: 4px 0; }
-    .info { display: flex; justify-content: space-between; gap: 8px; margin: 2px 0; font-size: 11px; }
+    .info { display: flex; justify-content: space-between; gap: 8px; margin: 2px 0; font-size: 13px; }
     .info span:first-child { color: #444; }
     .header-row,
     .row{
      display:grid;
-     grid-template-columns:1fr 28px 50px 55px;
+     grid-template-columns:1fr 35px 60px 65px;
      align-items:start;
      margin:3px 0;
      font-size:12px;
