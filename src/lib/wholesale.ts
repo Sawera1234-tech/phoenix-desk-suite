@@ -31,7 +31,7 @@ export interface Invoice {
   status: InvoiceStatus;
   notes: string | null;
   created_at: string;
-  shopkeepers?: Pick<Shopkeeper, "name"> | null;
+  shopkeepers?: { name: string; current_balance: number; opening_balance: number; } | null;
 }
 
 export interface InvoiceItem {
@@ -166,7 +166,7 @@ type InvoiceRow = {
   status: string;
   notes: string | null;
   created_at: string;
-  shopkeepers?: { name: string } | null;
+  shopkeepers?: { name: string; current_balance: number; opening_balance: number } | null;
 };
 
 function mapInvoice(row: InvoiceRow): Invoice {
@@ -213,7 +213,7 @@ async function currentUserId(): Promise<string | null> {
   return data.user?.id ?? null;
 }
 
-const INVOICE_SELECT = "id, invoice_no, invoice_date, shopkeeper_id, total, amount_paid, status, notes, created_at, shopkeepers(name)";
+const INVOICE_SELECT = "id, invoice_no, invoice_date, shopkeeper_id, total, amount_paid, status, notes, created_at, shopkeepers(name,current_balance,opening_balance)";
 
 // ─── Supabase queries ─────────────────────────────────────────────────────────
 

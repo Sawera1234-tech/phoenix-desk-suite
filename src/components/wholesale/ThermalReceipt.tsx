@@ -72,7 +72,14 @@ function ReceiptContent({
   business: BusinessProfile | null | undefined;
 }) {
   const remaining = calcRemaining(invoice.total, invoice.paid);
-  const now = new Date();
+
+const previousBalance =
+  Number(invoice.shopkeepers?.current_balance ?? 0) - remaining;
+
+const totalBalance = previousBalance + remaining;
+
+const now = new Date();
+  
 
   return (
     <div className="thermal-receipt mx-auto w-full bg-white px-4 py-5 font-mono text-black">
@@ -239,7 +246,13 @@ export function ThermalReceiptPreview({ invoiceId }: ThermalReceiptProps) {
 
 export async function printThermalReceipt(invoice: InvoiceWithItems) {
   const remaining = calcRemaining(invoice.total, invoice.paid);
-  const business = await fetchBusinessProfile().catch(() => null);
+
+const previousBalance =
+  Number(invoice.shopkeepers?.current_balance ?? 0) - remaining;
+
+const totalBalance = previousBalance + remaining;
+
+const business = await fetchBusinessProfile().catch(() => null);
   const now = new Date();
   const printDate = formatPrintDate(now);
   const printTime = formatPrintTime(now);
@@ -360,16 +373,43 @@ export async function printThermalReceipt(invoice: InvoiceWithItems) {
     <span class="price">Price</span>
     <span class="total">Total</span>
   </div>
-  ${itemsHtml}
-  <div class="divider"></div>
-  <div class="summary">
-    <div class="info"><span>Subtotal</span><span>${fmtRs(invoice.total)}</span></div>
-    <div class="info"><span>Paid</span><span>${fmtRs(invoice.paid)}</span></div>
-    <div class="divider-solid"></div>
-    <div class="remaining-box"><span>Remaining</span><span>${fmtRs(remaining)}</span></div>
+ ${itemsHtml}
+<div class="divider"></div>
+
+<div class="summary">
+  <div class="info">
+    <span>Subtotal</span>
+    <span>${fmtRs(invoice.total)}</span>
   </div>
-  <div class="divider"></div>
-  ${footerNote}
+
+  <div class="info">
+    <span>Paid</span>
+    <span>${fmtRs(invoice.paid)}</span>
+  </div>
+
+  <div class="info">
+    <span>Previous Balance</span>
+    <span>${fmtRs(previousBalance)}</span>
+  </div>
+
+  <div class="divider-solid"></div>
+
+  <div class="remaining-box">
+    <span>Remaining</span>
+    <span>${fmtRs(remaining)}</span>
+  </div>
+
+  <div class="divider-solid"></div>
+
+  <div class="info">
+    <span><b>Total Balance</b></span>
+    <span><b>${fmtRs(totalBalance)}</b></span>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+${footerNote}
 
 <div class="thank-you">Thank You!</div>
 <div class="visit-again">Please Visit Again</div>
