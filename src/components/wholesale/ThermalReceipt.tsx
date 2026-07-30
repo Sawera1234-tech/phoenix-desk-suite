@@ -320,7 +320,7 @@ export async function printThermalReceipt(invoice: InvoiceWithItems) {
     .total { font-weight: 600; }
     .summary .info { margin: 3px 0; font-size: 11.5px; }
     .bold { font-weight: bold; }
-   .remaining-box{
+  .remaining-box{
     display:flex;
     justify-content:space-between;
     align-items:center;
@@ -332,7 +332,7 @@ export async function printThermalReceipt(invoice: InvoiceWithItems) {
     font-weight:700;
     color:#000;
     background:#fff;
-   }
+   } 
     .footer-note { text-align: center; font-size: 10.5px; color: #333; margin-bottom: 6px; white-space: pre-line; }
     .thank-you { text-align: center; font-weight: bold; font-size: 12px; margin-top: 4px; }
     .visit-again { text-align: center; font-size: 10.5px; }
