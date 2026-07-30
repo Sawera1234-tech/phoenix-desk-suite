@@ -198,7 +198,7 @@ export const ThermalReceipt = forwardRef<HTMLDivElement, ThermalReceiptProps>(
       <div ref={ref} className="thermal-print-container hidden print:block">
         <style>{`
           @media print {
-            @page { size: 80mm auto; margin: 2mm; }
+            @page { size:80mm auto; margin:2mm; }
             .thermal-print-container { width: 76mm; }
             .thermal-receipt { padding: 0 !important; }
           }
@@ -273,13 +273,18 @@ export async function printThermalReceipt(invoice: InvoiceWithItems) {
   <style>
     @page { size: 80mm auto; margin: 3mm; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: 'Courier New', monospace;
-      font-size: 11px;
-      width: 76mm;
-      color: #000;
-      background: #fff;
-      line-height: 1.4;
+    body{
+    width:72mm;
+    margin:0 auto;
+    padding:2mm;
+    font-family:Arial,Helvetica,sans-serif;
+    font-size:12px;
+    font-weight:600;
+    line-height:1.4;
+    color:#000;
+    background:#fff;
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
     }
     .center { text-align: center; }
     .shop-name { font-size: 15px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.3px; }
@@ -289,17 +294,23 @@ export async function printThermalReceipt(invoice: InvoiceWithItems) {
     .divider-solid { border-top: 1px solid #000; margin: 4px 0; }
     .info { display: flex; justify-content: space-between; gap: 8px; margin: 2px 0; font-size: 11px; }
     .info span:first-child { color: #444; }
-    .header-row, .row {
-      display: flex;
-      justify-content: space-between;
-      gap: 4px;
-      margin: 4px 0;
-      font-size: 11px;
+    .header-row,
+    .row{
+     display:grid;
+     grid-template-columns:1fr 28px 50px 55px;
+     align-items:start;
+     margin:3px 0;
+     font-size:12px;
+     column-gap:4px;
     }
     .header-row { font-weight: bold; border-bottom: 1px solid #000; padding-bottom: 3px; text-transform: uppercase; }
-    .product { flex: 1; word-break: break-word; }
-    .qty { width: 22px; text-align: right; flex-shrink: 0; }
-    .price, .total { width: 46px; text-align: right; flex-shrink: 0; }
+    .product{
+    white-space:normal;
+    word-break:break-word;
+    overflow-wrap:anywhere;
+    }
+    .qty { text-align:right; }
+    .price, .total { text-align:right; font-weight:bold; }
     .total { font-weight: 600; }
     .summary .info { margin: 3px 0; font-size: 11.5px; }
     .bold { font-weight: bold; }
@@ -351,10 +362,22 @@ export async function printThermalReceipt(invoice: InvoiceWithItems) {
   </div>
   <div class="divider"></div>
   ${footerNote}
-  <div class="thank-you">Thank You!</div>
-  <div class="visit-again">Please Visit Again</div>
-  <div class="printed-at">Printed: ${printDate} ${printTime}</div>
-  <script>window.onload = function() { window.print(); window.onafterprint = function() { window.close(); }; };</script>
+
+<div class="thank-you">Thank You!</div>
+<div class="visit-again">Please Visit Again</div>
+<div class="printed-at">Printed: ${printDate} ${printTime}</div>
+
+<script>
+window.onload = () => {
+  setTimeout(() => {
+    window.print();
+  }, 500);
+
+  window.onafterprint = () => {
+    window.close();
+  };
+};
+</script>
 </body>
 </html>`);
   printWindow.document.close();
