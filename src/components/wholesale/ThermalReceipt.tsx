@@ -1,71 +1,138 @@
 import { useQuery } from "@tanstack/react-query";
 import { forwardRef } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import {
   calcRemaining,
   fetchInvoiceWithItems,
   fmtRs,
   statusLabel,
-  STORE_NAME,
   wholesaleKeys,
   type InvoiceWithItems,
 } from "@/lib/wholesale";
 
-interface ThermalReceiptProps {
-  invoiceId: string;
+// ==========================================
+// BUSINESS PROFILE (replaces hardcoded STORE_NAME)
+// ==========================================
+
+export type BusinessProfile = {
+  shop_name: string | null;
+  owner_name: string | null;
+  phone: string | null;
+  address: string | null;
+  currency: string | null;
+  invoice_footer: string | null;
+};
+
+const BUSINESS_PROFILE_SELECT = "shop_name, owner_name, phone, address, currency, invoice_footer";
+
+async function fetchBusinessProfile(): Promise<BusinessProfile | null> {
+  const { data, error } = await supabase
+    .from("business_profile")
+    .select(BUSINESS_PROFILE_SELECT)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as BusinessProfile | null;
 }
 
-function ReceiptContent({ invoice }: { invoice: InvoiceWithItems }) {
+export function useBusinessProfile() {
+  return useQuery({
+    queryKey: ["business_profile"],
+    queryFn: fetchBusinessProfile,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+// ==========================================
+// SHARED HELPERS
+// ==========================================
+
+function formatPrintDate(d: Date) {
+  return d.toLocaleDateString("en-PK", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function formatPrintTime(d: Date) {
+  return d.toLocaleTimeString("en-PK", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+function shopDisplayName(business: BusinessProfile | null | undefined) {
+  return business?.shop_name?.trim() || "Wholesale Invoice";
+}
+
+// ==========================================
+// RECEIPT CONTENT (shared by preview + hidden print container)
+// ==========================================
+
+function ReceiptContent({
+  invoice,
+  business,
+}: {
+  invoice: InvoiceWithItems;
+  business: BusinessProfile | null | undefined;
+}) {
   const remaining = calcRemaining(invoice.total, invoice.paid);
+  const now = new Date();
 
   return (
-    <div className="thermal-receipt mx-auto bg-white p-4 font-mono text-black">
+    <div className="thermal-receipt mx-auto w-full bg-white px-4 py-5 font-mono text-black">
+      {/* ===== HEADER ===== */}
       <div className="text-center">
-        <h1 className="text-base font-bold uppercase">{STORE_NAME}</h1>
-        <p className="mt-1 text-xs">Wholesale Invoice</p>
+        <h1 className="text-[15px] font-extrabold uppercase tracking-wide leading-tight">
+          {shopDisplayName(business)}
+        </h1>
+        {business?.address && (
+          <p className="mt-1 text-[10.5px] leading-snug text-neutral-700">{business.address}</p>
+        )}
+        {business?.phone && <p className="text-[10.5px] leading-snug text-neutral-700">Tel: {business.phone}</p>}
+        <p className="mt-2 text-[11px] font-bold uppercase tracking-[0.15em]">Wholesale Invoice</p>
       </div>
 
       <div className="my-3 border-t border-dashed border-black" />
 
-      <div className="space-y-1 text-xs">
-        <div className="flex justify-between">
-          <span>Invoice No:</span>
-          <span className="font-semibold">{invoice.invoice_number}</span>
-        </div>
-        <div className="flex justify-between">
-          <span>Date:</span>
-          <span>{invoice.invoice_date}</span>
-        </div>
-        <div className="flex justify-between">
-          <span>Customer:</span>
-          <span className="max-w-[120px] truncate text-right">
-            {invoice.shopkeepers?.name ?? "—"}
-          </span>
-        </div>
+      {/* ===== INVOICE INFO ===== */}
+      <div className="space-y-[3px] text-[11px] leading-snug">
+        <Row label="Invoice No:" value={invoice.invoice_number} bold />
+        <Row label="Invoice Date:" value={invoice.invoice_date} />
+        <Row label="Print Date:" value={formatPrintDate(now)} />
+        <Row label="Print Time:" value={formatPrintTime(now)} />
+        <Row label="Customer:" value={invoice.shopkeepers?.name ?? "—"} />
+        <Row label="Status:" value={statusLabel(invoice.status)} />
       </div>
 
       <div className="my-3 border-t border-dashed border-black" />
 
-      <div className="space-y-2 text-xs">
-        <div className="flex justify-between font-semibold">
+      {/* ===== PRODUCT TABLE ===== */}
+      <div className="text-[11px]">
+        <div className="flex gap-1 border-b border-black pb-1 font-bold uppercase tracking-wide">
           <span className="flex-1">Product</span>
-          <span className="w-8 text-right">Qty</span>
+          <span className="w-7 text-right">Qty</span>
           <span className="w-14 text-right">Price</span>
-          <span className="w-14 text-right">Total</span>
+          <span className="w-16 text-right">Total</span>
         </div>
 
-        {invoice.invoice_items.map((item) => (
-          <div key={item.id} className="flex justify-between gap-1">
-            <span className="flex-1 truncate">{item.products?.name ?? "Item"}</span>
-            <span className="w-8 text-right tabular-nums">{item.quantity}</span>
-            <span className="w-14 text-right tabular-nums">{item.unit_price.toLocaleString()}</span>
-            <span className="w-14 text-right tabular-nums">{item.line_total.toLocaleString()}</span>
-          </div>
-        ))}
+        <div className="divide-y divide-dashed divide-neutral-300">
+          {invoice.invoice_items.map((item) => (
+            <div key={item.id} className="flex gap-1 py-1.5 align-top">
+              <span className="flex-1 whitespace-normal break-words leading-snug">
+                {item.products?.name ?? "Item"}
+              </span>
+              <span className="w-7 shrink-0 text-right tabular-nums">{item.quantity}</span>
+              <span className="w-14 shrink-0 text-right tabular-nums">
+                {item.unit_price.toLocaleString()}
+              </span>
+              <span className="w-16 shrink-0 text-right font-semibold tabular-nums">
+                {item.line_total.toLocaleString()}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="my-3 border-t border-dashed border-black" />
 
-      <div className="space-y-1 text-xs">
+      {/* ===== TOTALS ===== */}
+      <div className="space-y-1 text-[11.5px]">
         <div className="flex justify-between">
           <span>Subtotal</span>
           <span className="tabular-nums">{fmtRs(invoice.total)}</span>
@@ -74,21 +141,46 @@ function ReceiptContent({ invoice }: { invoice: InvoiceWithItems }) {
           <span>Paid</span>
           <span className="tabular-nums">{fmtRs(invoice.paid)}</span>
         </div>
-        <div className="flex justify-between font-semibold">
+        <div className="my-1 border-t border-black" />
+        <div className="flex justify-between rounded-sm bg-black px-1.5 py-1 text-[12.5px] font-bold text-white">
           <span>Remaining</span>
           <span className="tabular-nums">{fmtRs(remaining)}</span>
-        </div>
-        <div className="flex justify-between">
-          <span>Status</span>
-          <span>{statusLabel(invoice.status)}</span>
         </div>
       </div>
 
       <div className="my-3 border-t border-dashed border-black" />
 
-      <p className="text-center text-xs font-semibold">Thank You</p>
+      {/* ===== FOOTER ===== */}
+      <div className="text-center text-[10.5px] leading-snug">
+        {business?.invoice_footer && (
+          <p className="mb-2 whitespace-pre-line text-neutral-700">{business.invoice_footer}</p>
+        )}
+        <div className="my-2 border-t border-dashed border-black" />
+        <p className="text-[11.5px] font-bold">Thank You!</p>
+        <p className="text-[10.5px]">Please Visit Again</p>
+        <p className="mt-2 text-[9.5px] text-neutral-500">
+          Printed: {formatPrintDate(now)} {formatPrintTime(now)}
+        </p>
+      </div>
     </div>
   );
+}
+
+function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
+  return (
+    <div className="flex justify-between gap-2">
+      <span className="text-neutral-600">{label}</span>
+      <span className={`max-w-[150px] truncate text-right ${bold ? "font-bold" : ""}`}>{value}</span>
+    </div>
+  );
+}
+
+// ==========================================
+// HIDDEN, PRINT-ONLY VERSION (rendered inline, shown only via @media print)
+// ==========================================
+
+interface ThermalReceiptProps {
+  invoiceId: string;
 }
 
 export const ThermalReceipt = forwardRef<HTMLDivElement, ThermalReceiptProps>(
@@ -98,36 +190,68 @@ export const ThermalReceipt = forwardRef<HTMLDivElement, ThermalReceiptProps>(
       queryFn: () => fetchInvoiceWithItems(invoiceId),
     });
 
+    const { data: business } = useBusinessProfile();
+
     if (!invoice) return <div ref={ref} />;
 
     return (
       <div ref={ref} className="thermal-print-container hidden print:block">
-        <ReceiptContent invoice={invoice} />
+        <style>{`
+          @media print {
+            @page { size: 80mm auto; margin: 2mm; }
+            .thermal-print-container { width: 76mm; }
+            .thermal-receipt { padding: 0 !important; }
+          }
+        `}</style>
+        <ReceiptContent invoice={invoice} business={business} />
       </div>
     );
   },
 );
 
-/** Visible preview for print dialog / debugging */
+// ==========================================
+// VISIBLE PREVIEW (for the print dialog / on-screen debugging)
+// ==========================================
+
 export function ThermalReceiptPreview({ invoiceId }: ThermalReceiptProps) {
   const { data: invoice, isLoading } = useQuery({
     queryKey: wholesaleKeys.invoice(invoiceId),
     queryFn: () => fetchInvoiceWithItems(invoiceId),
   });
 
-  if (isLoading) return <div className="py-8 text-center text-sm">Loading receipt…</div>;
+  const { data: business, isLoading: businessLoading } = useBusinessProfile();
+
+  if (isLoading || businessLoading) {
+    return <div className="py-8 text-center text-sm text-muted-foreground">Loading receipt…</div>;
+  }
   if (!invoice) return null;
 
   return (
-    <div className="mx-auto max-w-[80mm] rounded-lg border border-border bg-white shadow-sm">
-      <ReceiptContent invoice={invoice} />
+    <div className="mx-auto max-w-[80mm] overflow-hidden rounded-lg border border-border bg-white shadow-sm">
+      <ReceiptContent invoice={invoice} business={business} />
     </div>
   );
 }
 
-export function printThermalReceipt(invoice: InvoiceWithItems) {
+// ==========================================
+// POPUP WINDOW PRINT (standalone thermal print flow)
+// ==========================================
+
+export async function printThermalReceipt(invoice: InvoiceWithItems) {
   const remaining = calcRemaining(invoice.total, invoice.paid);
-  const printWindow = window.open("", "_blank", "width=320,height=600");
+  const business = await fetchBusinessProfile().catch(() => null);
+  const now = new Date();
+  const printDate = formatPrintDate(now);
+  const printTime = formatPrintTime(now);
+
+  const shopName = shopDisplayName(business);
+  const phoneLine = business?.phone ? `<div class="info-line">Tel: ${business.phone}</div>` : "";
+  const addressLine = business?.address ? `<div class="info-line">${business.address}</div>` : "";
+  const footerNote = business?.invoice_footer
+    ? `<p class="footer-note">${business.invoice_footer.replace(/\n/g, "<br/>")}</p>`
+    : "";
+
+  const printWindow = window.open("", "_blank", "width=340,height=640");
   if (!printWindow) return;
 
   const itemsHtml = invoice.invoice_items
@@ -147,43 +271,69 @@ export function printThermalReceipt(invoice: InvoiceWithItems) {
 <head>
   <title>Receipt ${invoice.invoice_number}</title>
   <style>
-    @page { size: 80mm auto; margin: 4mm; }
+    @page { size: 80mm auto; margin: 3mm; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: 'Courier New', monospace;
       font-size: 11px;
-      width: 72mm;
+      width: 76mm;
       color: #000;
       background: #fff;
+      line-height: 1.4;
     }
     .center { text-align: center; }
-    .title { font-size: 14px; font-weight: bold; text-transform: uppercase; }
+    .shop-name { font-size: 15px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.3px; }
+    .info-line { font-size: 10.5px; color: #333; margin-top: 1px; }
+    .doc-title { font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1.5px; margin-top: 6px; }
     .divider { border-top: 1px dashed #000; margin: 8px 0; }
-    .info { display: flex; justify-content: space-between; margin: 2px 0; }
+    .divider-solid { border-top: 1px solid #000; margin: 4px 0; }
+    .info { display: flex; justify-content: space-between; gap: 8px; margin: 2px 0; font-size: 11px; }
+    .info span:first-child { color: #444; }
     .header-row, .row {
       display: flex;
       justify-content: space-between;
-      gap: 2px;
-      margin: 3px 0;
+      gap: 4px;
+      margin: 4px 0;
+      font-size: 11px;
     }
-    .header-row { font-weight: bold; }
-    .product { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .qty { width: 24px; text-align: right; }
-    .price, .total { width: 48px; text-align: right; }
-    .summary .info { margin: 3px 0; }
+    .header-row { font-weight: bold; border-bottom: 1px solid #000; padding-bottom: 3px; text-transform: uppercase; }
+    .product { flex: 1; word-break: break-word; }
+    .qty { width: 22px; text-align: right; flex-shrink: 0; }
+    .price, .total { width: 46px; text-align: right; flex-shrink: 0; }
+    .total { font-weight: 600; }
+    .summary .info { margin: 3px 0; font-size: 11.5px; }
     .bold { font-weight: bold; }
-    .thank-you { text-align: center; font-weight: bold; margin-top: 8px; }
+    .remaining-box {
+      display: flex;
+      justify-content: space-between;
+      background: #000;
+      color: #fff;
+      font-weight: bold;
+      font-size: 12.5px;
+      padding: 5px 6px;
+      margin-top: 4px;
+      border-radius: 2px;
+    }
+    .footer-note { text-align: center; font-size: 10.5px; color: #333; margin-bottom: 6px; white-space: pre-line; }
+    .thank-you { text-align: center; font-weight: bold; font-size: 12px; margin-top: 4px; }
+    .visit-again { text-align: center; font-size: 10.5px; }
+    .printed-at { text-align: center; font-size: 9.5px; color: #666; margin-top: 8px; }
   </style>
 </head>
 <body>
   <div class="center">
-    <div class="title">${STORE_NAME}</div>
-    <div>Wholesale Invoice</div>
+    <div class="shop-name">${shopName}</div>
+    ${addressLine}
+    ${phoneLine}
+    <div class="doc-title">Wholesale Invoice</div>
   </div>
   <div class="divider"></div>
   <div class="info"><span>Invoice No:</span><span class="bold">${invoice.invoice_number}</span></div>
-  <div class="info"><span>Date:</span><span>${invoice.invoice_date}</span></div>
+  <div class="info"><span>Invoice Date:</span><span>${invoice.invoice_date}</span></div>
+  <div class="info"><span>Print Date:</span><span>${printDate}</span></div>
+  <div class="info"><span>Print Time:</span><span>${printTime}</span></div>
   <div class="info"><span>Customer:</span><span>${invoice.shopkeepers?.name ?? "—"}</span></div>
+  <div class="info"><span>Status:</span><span>${statusLabel(invoice.status)}</span></div>
   <div class="divider"></div>
   <div class="header-row">
     <span class="product">Product</span>
@@ -196,11 +346,14 @@ export function printThermalReceipt(invoice: InvoiceWithItems) {
   <div class="summary">
     <div class="info"><span>Subtotal</span><span>${fmtRs(invoice.total)}</span></div>
     <div class="info"><span>Paid</span><span>${fmtRs(invoice.paid)}</span></div>
-    <div class="info bold"><span>Remaining</span><span>${fmtRs(remaining)}</span></div>
-    <div class="info"><span>Status</span><span>${statusLabel(invoice.status)}</span></div>
+    <div class="divider-solid"></div>
+    <div class="remaining-box"><span>Remaining</span><span>${fmtRs(remaining)}</span></div>
   </div>
   <div class="divider"></div>
-  <div class="thank-you">Thank You</div>
+  ${footerNote}
+  <div class="thank-you">Thank You!</div>
+  <div class="visit-again">Please Visit Again</div>
+  <div class="printed-at">Printed: ${printDate} ${printTime}</div>
   <script>window.onload = function() { window.print(); window.onafterprint = function() { window.close(); }; };</script>
 </body>
 </html>`);
