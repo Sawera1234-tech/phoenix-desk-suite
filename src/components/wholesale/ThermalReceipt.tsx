@@ -274,9 +274,9 @@ export async function printThermalReceipt(invoice: InvoiceWithItems) {
     @page { size: 80mm auto; margin: 3mm; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
    body{
-      width:80mm;
+      width:72mm;
       margin:0;
-      padding:0;
+      padding:2mm;
       font-family:'Courier New', monospace;
       font-size:14px;
       font-weight:700;
@@ -301,11 +301,11 @@ export async function printThermalReceipt(invoice: InvoiceWithItems) {
     .header-row,
     .row{
      display:grid;
-     grid-template-columns:1fr 35px 60px 65px;
+     grid-template-columns:1fr 24px 42px 46px;
      align-items:start;
      margin:3px 0;
      font-size:12px;
-     column-gap:4px;
+     column-gap:3px;
     }
     .header-row { font-weight: bold; border-bottom: 1px solid #000; padding-bottom: 3px; text-transform: uppercase; }
     .product{
@@ -320,17 +320,19 @@ export async function printThermalReceipt(invoice: InvoiceWithItems) {
     .total { font-weight: 600; }
     .summary .info { margin: 3px 0; font-size: 11.5px; }
     .bold { font-weight: bold; }
-    .remaining-box {
-      display: flex;
-      justify-content: space-between;
-      background: #000;
-      color: #fff;
-      font-weight: bold;
-      font-size: 12.5px;
-      padding: 5px 6px;
-      margin-top: 4px;
-      border-radius: 2px;
-    }
+   .remaining-box{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-top:6px;
+    padding:6px 4px;
+    background:#000;
+    color:#fff !important;
+    font-size:14px;
+    font-weight:700;
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
+   }
     .footer-note { text-align: center; font-size: 10.5px; color: #333; margin-bottom: 6px; white-space: pre-line; }
     .thank-you { text-align: center; font-weight: bold; font-size: 12px; margin-top: 4px; }
     .visit-again { text-align: center; font-size: 10.5px; }
