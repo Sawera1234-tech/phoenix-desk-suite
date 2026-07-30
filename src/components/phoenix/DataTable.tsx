@@ -1,9 +1,9 @@
-import { useMemo, useState, type ReactNode } from "react";
-import { Search, ArrowUpDown } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Search, ArrowUpDown, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type Column<T> = {
-  key: keyof T & string;
+  key: string;
   label: string;
   align?: "left" | "right";
   render?: (row: T) => ReactNode;
@@ -22,6 +22,8 @@ export function DataTable<T extends Record<string, unknown>>({
   actions,
   initialSort,
   rowKey,
+  isLoading = false,
+  pageSize = 25,
 }: {
   rows: T[];
   columns: Column<T>[];
@@ -29,10 +31,13 @@ export function DataTable<T extends Record<string, unknown>>({
   searchPlaceholder?: string;
   emptyMessage?: string;
   actions?: ReactNode;
-  initialSort?: { key: keyof T & string; dir?: SortDir };
+  initialSort?: { key: string; dir?: SortDir };
   rowKey: (row: T) => string;
+  isLoading?: boolean;
+  pageSize?: number;
 }) {
   const [q, setQ] = useState("");
+  const [page, setPage] = useState(1);
   const [sortKey, setSortKey] = useState<string>(initialSort?.key ?? columns[0]?.key ?? "");
   const [sortDir, setSortDir] = useState<SortDir>(initialSort?.dir ?? "desc");
 
@@ -45,8 +50,8 @@ export function DataTable<T extends Record<string, unknown>>({
   const sorted = useMemo(() => {
     const copy = [...filtered];
     copy.sort((a, b) => {
-      const av = a[sortKey];
-      const bv = b[sortKey];
+      const av = a[sortKey as keyof T];
+      const bv = b[sortKey as keyof T];
       if (typeof av === "number" && typeof bv === "number") return sortDir === "asc" ? av - bv : bv - av;
       return sortDir === "asc"
         ? String(av ?? "").localeCompare(String(bv ?? ""))
@@ -54,6 +59,13 @@ export function DataTable<T extends Record<string, unknown>>({
     });
     return copy;
   }, [filtered, sortKey, sortDir]);
+
+  const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
+  useEffect(() => {
+    setPage(1);
+  }, [q, rows.length, sortKey, sortDir]);
+  const current = Math.min(page, pageCount);
+  const visible = sorted.slice((current - 1) * pageSize, current * pageSize);
 
   const toggle = (k: string) => {
     if (k === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -78,7 +90,7 @@ export function DataTable<T extends Record<string, unknown>>({
         <div className="flex items-center gap-2">{actions}</div>
       </header>
 
-      <div className="max-h-[calc(100vh-320px)] overflow-auto">
+      <div className="max-h-[calc(100vh-340px)] overflow-auto">
         <table className="w-full border-separate border-spacing-0 text-[13px]">
           <thead className="sticky top-0 z-10 bg-muted/70 text-[11px] uppercase tracking-wide backdrop-blur">
             <tr>
@@ -116,7 +128,7 @@ export function DataTable<T extends Record<string, unknown>>({
             </tr>
           </thead>
           <tbody>
-            {sorted.map((row, i) => (
+            {visible.map((row, i) => (
               <tr
                 key={rowKey(row)}
                 className={cn("transition-colors hover:bg-primary-soft/40", i % 2 === 1 && "bg-muted/25")}
@@ -130,15 +142,24 @@ export function DataTable<T extends Record<string, unknown>>({
                       c.className,
                     )}
                   >
-                    {c.render ? c.render(row) : String(row[c.key] ?? "—")}
+                    {c.render ? c.render(row) : String(row[c.key as keyof T] ?? "—")}
                   </td>
                 ))}
               </tr>
             ))}
-            {sorted.length === 0 && (
+            {isLoading && sorted.length === 0 && (
               <tr>
                 <td colSpan={columns.length} className="px-4 py-12 text-center text-[12px] text-muted-foreground">
-                  {emptyMessage}
+                  <span className="inline-flex items-center gap-2">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading records…
+                  </span>
+                </td>
+              </tr>
+            )}
+            {!isLoading && sorted.length === 0 && (
+              <tr>
+                <td colSpan={columns.length} className="px-4 py-12 text-center text-[12px] text-muted-foreground">
+                  {q.trim() ? `No results for “${q}”.` : emptyMessage}
                 </td>
               </tr>
             )}
@@ -146,10 +167,32 @@ export function DataTable<T extends Record<string, unknown>>({
         </table>
       </div>
 
-      <footer className="flex items-center justify-between border-t border-border px-6 py-3 text-[11.5px] text-muted-foreground">
+      <footer className="flex items-center justify-between gap-3 border-t border-border px-6 py-3 text-[11.5px] text-muted-foreground">
         <span>
-          Showing <span className="font-semibold text-foreground">{sorted.length}</span> of {rows.length}
+          Showing <span className="font-semibold text-foreground">{visible.length}</span> of {sorted.length}
+          {sorted.length !== rows.length && ` (filtered from ${rows.length})`}
         </span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={current <= 1}
+            className="inline-flex h-7 items-center gap-1 rounded-md border border-border px-2 font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" /> Prev
+          </button>
+          <span>
+            Page <span className="font-semibold text-foreground">{current}</span> / {pageCount}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+            disabled={current >= pageCount}
+            className="inline-flex h-7 items-center gap-1 rounded-md border border-border px-2 font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Next <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </footer>
     </section>
   );
