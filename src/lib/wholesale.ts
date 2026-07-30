@@ -84,7 +84,6 @@ export const wholesaleKeys = {
 
 // ─── Formatting & calculations ───────────────────────────────────────────────
 
-export const STORE_NAME = "Raza Mobile Parts";
 
 export function fmtRs(amount: number): string {
   return `Rs ${Number(amount ?? 0).toLocaleString("en-PK")}`;
