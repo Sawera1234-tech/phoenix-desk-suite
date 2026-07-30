@@ -1,0 +1,25 @@
+# Query: INVOICE_SELECT
+# ContextLines: 1
+
+5 results - 1 file
+
+src/lib/wholesale.ts:
+  215  
+  216: const INVOICE_SELECT = "id, invoice_no, invoice_date, shopkeeper_id, total, amount_paid, status, notes, created_at, shopkeepers(name,current_balance)";
+  217  
+
+  222      .from("invoices")
+  223:     .select(INVOICE_SELECT)
+  224      .order("created_at", { ascending: false });
+
+  232      .from("invoices")
+  233:     .select(INVOICE_SELECT)
+  234      .eq("id", id)
+
+  353      })
+  354:     .select(INVOICE_SELECT)
+  355      .single();
+
+  401      .eq("id", id)
+  402:     .select(INVOICE_SELECT)
+  403      .single();

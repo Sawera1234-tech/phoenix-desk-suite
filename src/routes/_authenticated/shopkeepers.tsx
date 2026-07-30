@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AppShell } from "@/components/phoenix/AppShell";
 import { DataTable } from "@/components/phoenix/DataTable";
 import { fmtRs, fmtDate } from "@/lib/format";
@@ -32,6 +32,7 @@ type Shopkeeper = {
 function ShopkeepersPage() {
   const qc = useQueryClient();
   const [ledgerFor, setLedgerFor] = useState<Shopkeeper | null>(null);
+  const [editShopkeeper, setEditShopkeeper] = useState<Shopkeeper | null>(null);
 
   const { data = [] } = useQuery({
     queryKey: ["shopkeepers"],
@@ -41,7 +42,22 @@ function ShopkeepersPage() {
       return data as Shopkeeper[];
     },
   });
+const deleteShopkeeper = async (id: string) => {
+  if (!confirm("Are you sure you want to delete this shopkeeper?")) return;
 
+  const { error } = await supabase
+    .from("shopkeepers")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    toast.error(error.message);
+    return;
+  }
+
+  toast.success("Shopkeeper deleted");
+  qc.invalidateQueries({ queryKey: ["shopkeepers"] });
+};
   return (
     <AppShell title="Market Ledger" subtitle="Shopkeepers & Balances">
       <div className="mx-auto max-w-[1400px] space-y-4 p-6 xl:p-8">
@@ -78,12 +94,164 @@ function ShopkeepersPage() {
                 </Button>
               ),
             },
+            {
+  key: "actions",
+  label: "Actions",
+  sortable: false,
+  align: "right",
+  render: (r) => (
+    <div className="flex gap-2 justify-end">
+      <Button
+        size="sm"
+        variant="secondary"
+        onClick={() => setEditShopkeeper(r)}
+      >
+        Edit
+      </Button>
+
+      <Button
+        size="sm"
+        variant="destructive"
+        onClick={() => deleteShopkeeper(r.id)}
+      >
+        Delete
+      </Button>
+    </div>
+  ),
+},
           ]}
         />
       </div>
 
       <LedgerDialog shopkeeper={ledgerFor} onClose={() => setLedgerFor(null)} onEntryAdded={() => qc.invalidateQueries({ queryKey: ["shopkeepers"] })} />
+      <EditShopkeeperDialog shopkeeper={editShopkeeper} onClose={() => setEditShopkeeper(null)} onUpdated={() => qc.invalidateQueries({ queryKey: ["shopkeepers"] })} onDelete={deleteShopkeeper} />
     </AppShell>
+  );
+}
+function EditShopkeeperDialog({
+  shopkeeper,
+  onClose,
+  onUpdated,
+  onDelete,
+}: {
+  shopkeeper: Shopkeeper | null;
+  onClose: () => void;
+  onUpdated: () => void;
+  onDelete: (id: string) => void;
+}) {
+  const [form, setForm] = useState({
+    name: "",
+    shop_name: "",
+    phone: "",
+    address: "",
+    opening_balance: "0",
+  });
+
+ useEffect(() => {
+  if (!shopkeeper) return;
+
+  setForm({
+    name: shopkeeper.name ?? "",
+    shop_name: shopkeeper.shop_name ?? "",
+    phone: shopkeeper.phone ?? "",
+    address: "",
+    opening_balance: String(shopkeeper.opening_balance ?? 0),
+  });
+}, [shopkeeper]);
+
+  const update = useMutation({
+    mutationFn: async () => {
+      if (!shopkeeper) return;
+
+      const opening = Number(form.opening_balance) || 0;
+
+      const { error } = await supabase
+        .from("shopkeepers")
+        .update({
+          name: form.name,
+          shop_name: form.shop_name || null,
+          phone: form.phone || null,
+          address: form.address || null,
+          opening_balance: opening,
+          current_balance: opening,
+        })
+        .eq("id", shopkeeper.id);
+
+      if (error) throw error;
+    },
+
+    onSuccess: () => {
+      toast.success("Shopkeeper updated");
+      onUpdated();
+      onClose();
+    },
+
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  if (!shopkeeper) return null;
+
+  return (
+    <Dialog open={!!shopkeeper} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit Shopkeeper</DialogTitle>
+        </DialogHeader>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Input
+            placeholder="Name"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+          />
+
+          <Input
+            placeholder="Shop Name"
+            value={form.shop_name}
+            onChange={(e) => setForm({ ...form, shop_name: e.target.value })}
+          />
+
+          <Input
+            placeholder="Phone"
+            value={form.phone}
+            onChange={(e) => setForm({ ...form, phone: e.target.value })}
+          />
+
+          <Input
+            type="number"
+            placeholder="Opening Balance"
+            value={form.opening_balance}
+            onChange={(e) =>
+              setForm({ ...form, opening_balance: e.target.value })
+            }
+          />
+        </div>
+
+        <DialogFooter>
+          <Button
+             variant="destructive"
+             onClick={() => {
+              if (shopkeeper) {
+               onDelete(shopkeeper.id);
+               onClose();
+             }
+           }}
+  >
+          Delete
+          </Button>
+
+            <Button variant="outline" onClick={onClose}>
+          Cancel
+  </Button>
+
+  <Button
+    onClick={() => update.mutate()}
+    disabled={update.isPending}
+  >
+    Save
+  </Button>
+  </DialogFooter>
+    </Dialog>
   );
 }
 
