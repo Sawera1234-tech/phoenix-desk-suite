@@ -62,8 +62,12 @@ function ShopkeepersPage() {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("shopkeepers").delete().eq("id", id);
-      if (error) throw error;
+      const { data, error } = await supabase.from("shopkeepers").delete().eq("id", id).select("id");
+      if (error) throw new Error(error.message);
+      if (!data || data.length === 0)
+        throw new Error(
+          "Delete failed — no row was removed. You may not have permission, or linked invoices/ledger entries are blocking it.",
+        );
     },
     onSuccess: () => {
       toast.success("Shopkeeper deleted");
@@ -188,7 +192,7 @@ function EditShopkeeperDialog({
       const opening = Number(form.opening_balance) || 0;
       const delta = opening - Number(shopkeeper.opening_balance ?? 0);
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("shopkeepers")
         .update({
           name: form.name.trim(),
@@ -200,9 +204,12 @@ function EditShopkeeperDialog({
           // so ledger/invoice movements stay intact
           current_balance: Number(shopkeeper.current_balance ?? 0) + delta,
         })
-        .eq("id", shopkeeper.id);
+        .eq("id", shopkeeper.id)
+        .select("id");
 
-      if (error) throw error;
+      if (error) throw new Error(error.message);
+      if (!data || data.length === 0)
+        throw new Error("Update failed — no row was changed. You may not have permission to edit shopkeepers.");
     },
     onSuccess: () => {
       toast.success("Shopkeeper updated");
