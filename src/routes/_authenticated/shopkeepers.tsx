@@ -24,6 +24,7 @@ type Shopkeeper = {
   name: string;
   shop_name: string | null;
   phone: string | null;
+  address: string | null;
   opening_balance: number;
   current_balance: number;
   is_active: boolean;
@@ -33,8 +34,9 @@ function ShopkeepersPage() {
   const qc = useQueryClient();
   const [ledgerFor, setLedgerFor] = useState<Shopkeeper | null>(null);
   const [editShopkeeper, setEditShopkeeper] = useState<Shopkeeper | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Shopkeeper | null>(null);
 
-  const { data = [] } = useQuery({
+  const { data = [], isLoading } = useQuery({
     queryKey: ["shopkeepers"],
     queryFn: async () => {
       const { data, error } = await supabase.from("shopkeepers").select("*").order("name");
@@ -42,32 +44,36 @@ function ShopkeepersPage() {
       return data as Shopkeeper[];
     },
   });
-const deleteShopkeeper = async (id: string) => {
-  if (!confirm("Are you sure you want to delete this shopkeeper?")) return;
 
-  const { error } = await supabase
-    .from("shopkeepers")
-    .delete()
-    .eq("id", id);
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ["shopkeepers"] });
+    qc.invalidateQueries({ queryKey: ["dashboard"] });
+  };
 
-  if (error) {
-    toast.error(error.message);
-    return;
-  }
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("shopkeepers").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Shopkeeper deleted");
+      setDeleteTarget(null);
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
-  toast.success("Shopkeeper deleted");
-  qc.invalidateQueries({ queryKey: ["shopkeepers"] });
-};
   return (
     <AppShell title="Market Ledger" subtitle="Shopkeepers & Balances">
       <div className="mx-auto max-w-[1400px] space-y-4 p-6 xl:p-8">
         <DataTable<Shopkeeper>
           rows={data}
+          isLoading={isLoading}
           rowKey={(r) => r.id}
           searchKeys={["name", "shop_name", "phone"]}
           searchPlaceholder="Search shopkeeper or shop…"
           initialSort={{ key: "current_balance", dir: "desc" }}
-          actions={<NewShopkeeperDialog onCreated={() => qc.invalidateQueries({ queryKey: ["shopkeepers"] })} />}
+          actions={<NewShopkeeperDialog onCreated={refresh} />}
           emptyMessage="No shopkeepers yet."
           columns={[
             { key: "name", label: "Name" },
@@ -84,50 +90,58 @@ const deleteShopkeeper = async (id: string) => {
               },
             },
             {
-              key: "id",
-              label: "Ledger",
+              key: "actions",
+              label: "Actions",
               sortable: false,
               align: "right",
               render: (r) => (
-                <Button size="sm" variant="outline" className="h-7 gap-1" onClick={() => setLedgerFor(r)}>
-                  <BookOpen className="h-3 w-3" /> View
-                </Button>
+                <div className="flex justify-end gap-2">
+                  <Button size="sm" variant="outline" className="h-7 gap-1" onClick={() => setLedgerFor(r)}>
+                    <BookOpen className="h-3 w-3" /> Ledger
+                  </Button>
+                  <Button size="sm" variant="secondary" className="h-7 gap-1" onClick={() => setEditShopkeeper(r)}>
+                    <Pencil className="h-3 w-3" /> Edit
+                  </Button>
+                  <Button size="sm" variant="destructive" className="h-7 gap-1" onClick={() => setDeleteTarget(r)}>
+                    <Trash2 className="h-3 w-3" /> Delete
+                  </Button>
+                </div>
               ),
             },
-            {
-  key: "actions",
-  label: "Actions",
-  sortable: false,
-  align: "right",
-  render: (r) => (
-    <div className="flex gap-2 justify-end">
-      <Button
-        size="sm"
-        variant="secondary"
-        onClick={() => setEditShopkeeper(r)}
-      >
-        Edit
-      </Button>
-
-      <Button
-        size="sm"
-        variant="destructive"
-        onClick={() => deleteShopkeeper(r.id)}
-      >
-        Delete
-      </Button>
-    </div>
-  ),
-},
           ]}
         />
       </div>
 
-      <LedgerDialog shopkeeper={ledgerFor} onClose={() => setLedgerFor(null)} onEntryAdded={() => qc.invalidateQueries({ queryKey: ["shopkeepers"] })} />
-      <EditShopkeeperDialog shopkeeper={editShopkeeper} onClose={() => setEditShopkeeper(null)} onUpdated={() => qc.invalidateQueries({ queryKey: ["shopkeepers"] })} onDelete={deleteShopkeeper} />
+      <LedgerDialog shopkeeper={ledgerFor} onClose={() => setLedgerFor(null)} onEntryAdded={refresh} />
+      <EditShopkeeperDialog shopkeeper={editShopkeeper} onClose={() => setEditShopkeeper(null)} onUpdated={refresh} />
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {deleteTarget?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes the shopkeeper and their ledger history. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={remove.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                if (deleteTarget) remove.mutate(deleteTarget.id);
+              }}
+              disabled={remove.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {remove.isPending ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppShell>
   );
 }
+
 function EditShopkeeperDialog({
   shopkeeper,
   onClose,
