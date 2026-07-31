@@ -62,8 +62,12 @@ function ShopkeepersPage() {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("shopkeepers").delete().eq("id", id);
-      if (error) throw error;
+      const { data, error } = await supabase.from("shopkeepers").delete().eq("id", id).select("id");
+      if (error) throw new Error(error.message);
+      if (!data || data.length === 0)
+        throw new Error(
+          "Delete failed — no row was removed. You may not have permission, or linked invoices/ledger entries are blocking it.",
+        );
     },
     onSuccess: () => {
       toast.success("Shopkeeper deleted");
