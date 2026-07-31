@@ -192,7 +192,7 @@ function EditShopkeeperDialog({
       const opening = Number(form.opening_balance) || 0;
       const delta = opening - Number(shopkeeper.opening_balance ?? 0);
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("shopkeepers")
         .update({
           name: form.name.trim(),
@@ -204,9 +204,12 @@ function EditShopkeeperDialog({
           // so ledger/invoice movements stay intact
           current_balance: Number(shopkeeper.current_balance ?? 0) + delta,
         })
-        .eq("id", shopkeeper.id);
+        .eq("id", shopkeeper.id)
+        .select("id");
 
-      if (error) throw error;
+      if (error) throw new Error(error.message);
+      if (!data || data.length === 0)
+        throw new Error("Update failed — no row was changed. You may not have permission to edit shopkeepers.");
     },
     onSuccess: () => {
       toast.success("Shopkeeper updated");
