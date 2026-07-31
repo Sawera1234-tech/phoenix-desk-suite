@@ -387,6 +387,36 @@ export async function updateInvoice(id: string, form: InvoiceFormData): Promise<
   const status = calcInvoiceStatus(total, form.paid);
   const userId = await currentUserId();
 
+  // ── 1. Reverse the OLD invoice balance from the shopkeeper before saving ──
+  const { data: existing, error: existingError } = await supabase
+    .from("invoices")
+    .select("shopkeeper_id, total, amount_paid")
+    .eq("id", id)
+    .single();
+  if (existingError) throw existingError;
+
+  const oldRemaining = calcRemaining(
+    Number(existing?.total ?? 0),
+    Number(existing?.amount_paid ?? 0),
+  );
+  const oldShopkeeperId = existing?.shopkeeper_id ?? null;
+
+  if (oldShopkeeperId && oldRemaining !== 0) {
+    const { data: sk, error: skError } = await supabase
+      .from("shopkeepers")
+      .select("current_balance")
+      .eq("id", oldShopkeeperId)
+      .single();
+    if (skError) throw skError;
+
+    const { error: reverseError } = await supabase
+      .from("shopkeepers")
+      .update({ current_balance: Number(sk?.current_balance ?? 0) - oldRemaining })
+      .eq("id", oldShopkeeperId);
+    if (reverseError) throw reverseError;
+  }
+
+
   const { data: invoice, error: invoiceError } = await supabase
     .from("invoices")
     .update({
