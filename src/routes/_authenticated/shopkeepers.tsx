@@ -146,12 +146,10 @@ function EditShopkeeperDialog({
   shopkeeper,
   onClose,
   onUpdated,
-  onDelete,
 }: {
   shopkeeper: Shopkeeper | null;
   onClose: () => void;
   onUpdated: () => void;
-  onDelete: (id: string) => void;
 }) {
   const [form, setForm] = useState({
     name: "",
@@ -161,49 +159,48 @@ function EditShopkeeperDialog({
     opening_balance: "0",
   });
 
- useEffect(() => {
-  if (!shopkeeper) return;
-
-  setForm({
-    name: shopkeeper.name ?? "",
-    shop_name: shopkeeper.shop_name ?? "",
-    phone: shopkeeper.phone ?? "",
-    address: "",
-    opening_balance: String(shopkeeper.opening_balance ?? 0),
-  });
-}, [shopkeeper]);
+  useEffect(() => {
+    if (!shopkeeper) return;
+    setForm({
+      name: shopkeeper.name ?? "",
+      shop_name: shopkeeper.shop_name ?? "",
+      phone: shopkeeper.phone ?? "",
+      address: shopkeeper.address ?? "",
+      opening_balance: String(shopkeeper.opening_balance ?? 0),
+    });
+  }, [shopkeeper]);
 
   const update = useMutation({
     mutationFn: async () => {
       if (!shopkeeper) return;
+      if (!form.name.trim()) throw new Error("Name is required");
 
       const opening = Number(form.opening_balance) || 0;
+      const delta = opening - Number(shopkeeper.opening_balance ?? 0);
 
       const { error } = await supabase
         .from("shopkeepers")
         .update({
-          name: form.name,
+          name: form.name.trim(),
           shop_name: form.shop_name || null,
           phone: form.phone || null,
           address: form.address || null,
           opening_balance: opening,
-          current_balance: opening,
+          // shift the running balance by the opening-balance change only,
+          // so ledger/invoice movements stay intact
+          current_balance: Number(shopkeeper.current_balance ?? 0) + delta,
         })
         .eq("id", shopkeeper.id);
 
       if (error) throw error;
     },
-
     onSuccess: () => {
       toast.success("Shopkeeper updated");
       onUpdated();
       onClose();
     },
-
     onError: (e: Error) => toast.error(e.message),
   });
-
-  if (!shopkeeper) return null;
 
   return (
     <Dialog open={!!shopkeeper} onOpenChange={(o) => !o && onClose()}>
@@ -213,61 +210,46 @@ function EditShopkeeperDialog({
         </DialogHeader>
 
         <div className="grid grid-cols-2 gap-3">
-          <Input
-            placeholder="Name"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-          />
-
-          <Input
-            placeholder="Shop Name"
-            value={form.shop_name}
-            onChange={(e) => setForm({ ...form, shop_name: e.target.value })}
-          />
-
-          <Input
-            placeholder="Phone"
-            value={form.phone}
-            onChange={(e) => setForm({ ...form, phone: e.target.value })}
-          />
-
-          <Input
-            type="number"
-            placeholder="Opening Balance"
-            value={form.opening_balance}
-            onChange={(e) =>
-              setForm({ ...form, opening_balance: e.target.value })
-            }
-          />
+          <div className="space-y-1.5">
+            <Label>Name *</Label>
+            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Shop Name</Label>
+            <Input value={form.shop_name} onChange={(e) => setForm({ ...form, shop_name: e.target.value })} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Phone</Label>
+            <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Opening Balance</Label>
+            <Input
+              type="number"
+              step="0.01"
+              value={form.opening_balance}
+              onChange={(e) => setForm({ ...form, opening_balance: e.target.value })}
+            />
+          </div>
+          <div className="col-span-2 space-y-1.5">
+            <Label>Address</Label>
+            <Textarea rows={2} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+          </div>
         </div>
 
         <DialogFooter>
-          <Button
-             variant="destructive"
-             onClick={() => {
-              if (shopkeeper) {
-               onDelete(shopkeeper.id);
-               onClose();
-             }
-           }}
-  >
-          Delete
+          <Button variant="outline" onClick={onClose}>
+            Cancel
           </Button>
-
-            <Button variant="outline" onClick={onClose}>
-          Cancel
-  </Button>
-
-  <Button
-    onClick={() => update.mutate()}
-    disabled={update.isPending}
-  >
-    Save
-  </Button>
-  </DialogFooter>
+          <Button onClick={() => update.mutate()} disabled={!form.name.trim() || update.isPending}>
+            {update.isPending ? "Saving…" : "Save changes"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
     </Dialog>
   );
 }
+
 
 function NewShopkeeperDialog({ onCreated }: { onCreated: () => void }) {
   const [open, setOpen] = useState(false);
