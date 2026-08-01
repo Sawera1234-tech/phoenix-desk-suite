@@ -277,11 +277,13 @@ export async function fetchShopkeepers(): Promise<Shopkeeper[]> {
 }
 
 export async function fetchWholesaleStats(): Promise<WholesaleStats> {
-  const { data, error } = await supabase
-    .from("invoices")
-    .select("total, amount_paid, status, invoice_date");
+  const [{ data, error }, { data: sks, error: skError }] = await Promise.all([
+    supabase.from("invoices").select("total, amount_paid, status, invoice_date"),
+    supabase.from("shopkeepers").select("current_balance"),
+  ]);
 
   if (error) throw error;
+  if (skError) throw skError;
 
   const invoices = data ?? [];
   const today = new Date().toISOString().slice(0, 10);
@@ -289,17 +291,16 @@ export async function fetchWholesaleStats(): Promise<WholesaleStats> {
   return {
     totalInvoices: invoices.length,
     todaySales: invoices
-      .filter((inv) => inv.invoice_date === today)
+      .filter((inv) => inv.invoice_date === today && inv.status !== "cancelled")
       .reduce((sum, inv) => sum + Number(inv.total ?? 0), 0),
-    outstandingBalance: invoices.reduce(
-      (sum, inv) => sum + Math.max(0, Number(inv.total ?? 0) - Number(inv.amount_paid ?? 0)),
-      0,
-    ),
+    // Outstanding is the live market balance held by shopkeepers.
+    outstandingBalance: (sks ?? []).reduce((sum, s) => sum + Number(s.current_balance ?? 0), 0),
     partialCount: invoices.filter(
       (inv) => normalizeStatus(inv.status, Number(inv.total ?? 0), Number(inv.amount_paid ?? 0)) === "partial",
     ).length,
   };
 }
+
 
 export async function generateInvoiceNumber(): Promise<string> {
   const { data, error } = await supabase
