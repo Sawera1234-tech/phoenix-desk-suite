@@ -80,7 +80,10 @@ function SettingsPage() {
             <Button onClick={() => save.mutate()} disabled={save.isPending}>{save.isPending ? "Saving…" : "Save changes"}</Button>
           </div>
         </section>
+
+        <BackupPanel />
       </div>
+
     </AppShell>
   );
 }
