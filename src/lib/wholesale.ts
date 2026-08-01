@@ -277,11 +277,13 @@ export async function fetchShopkeepers(): Promise<Shopkeeper[]> {
 }
 
 export async function fetchWholesaleStats(): Promise<WholesaleStats> {
-  const { data, error } = await supabase
-    .from("invoices")
-    .select("total, amount_paid, status, invoice_date");
+  const [{ data, error }, { data: sks, error: skError }] = await Promise.all([
+    supabase.from("invoices").select("total, amount_paid, status, invoice_date"),
+    supabase.from("shopkeepers").select("current_balance"),
+  ]);
 
   if (error) throw error;
+  if (skError) throw skError;
 
   const invoices = data ?? [];
   const today = new Date().toISOString().slice(0, 10);
@@ -289,17 +291,16 @@ export async function fetchWholesaleStats(): Promise<WholesaleStats> {
   return {
     totalInvoices: invoices.length,
     todaySales: invoices
-      .filter((inv) => inv.invoice_date === today)
+      .filter((inv) => inv.invoice_date === today && inv.status !== "cancelled")
       .reduce((sum, inv) => sum + Number(inv.total ?? 0), 0),
-    outstandingBalance: invoices.reduce(
-      (sum, inv) => sum + Math.max(0, Number(inv.total ?? 0) - Number(inv.amount_paid ?? 0)),
-      0,
-    ),
+    // Outstanding is the live market balance held by shopkeepers.
+    outstandingBalance: (sks ?? []).reduce((sum, s) => sum + Number(s.current_balance ?? 0), 0),
     partialCount: invoices.filter(
       (inv) => normalizeStatus(inv.status, Number(inv.total ?? 0), Number(inv.amount_paid ?? 0)) === "partial",
     ).length,
   };
 }
+
 
 export async function generateInvoiceNumber(): Promise<string> {
   const { data, error } = await supabase
@@ -474,6 +475,19 @@ export async function updateInvoice(id: string, form: InvoiceFormData): Promise<
 }
 
 export async function deleteInvoice(id: string): Promise<void> {
+  // Reverse the outstanding amount this invoice contributed to the customer
+  // balance before removing its ledger entries (ledger deletes do not trigger
+  // a balance recalculation).
+  const { data: existing, error: existingError } = await supabase
+    .from("invoices")
+    .select("shopkeeper_id, total, amount_paid")
+    .eq("id", id)
+    .single();
+  if (existingError) throw existingError;
+
+  const oldRemaining = calcRemaining(Number(existing?.total ?? 0), Number(existing?.amount_paid ?? 0));
+  const shopkeeperId = existing?.shopkeeper_id ?? null;
+
   const { error: ledgerError } = await supabase
     .from("ledger_entries")
     .delete()
@@ -481,12 +495,28 @@ export async function deleteInvoice(id: string): Promise<void> {
     .eq("reference_id", id);
   if (ledgerError) throw ledgerError;
 
+  if (shopkeeperId && oldRemaining !== 0) {
+    const { data: sk, error: skError } = await supabase
+      .from("shopkeepers")
+      .select("current_balance")
+      .eq("id", shopkeeperId)
+      .single();
+    if (skError) throw skError;
+
+    const { error: balError } = await supabase
+      .from("shopkeepers")
+      .update({ current_balance: Number(sk?.current_balance ?? 0) - oldRemaining })
+      .eq("id", shopkeeperId);
+    if (balError) throw balError;
+  }
+
   const { error: itemsError } = await supabase.from("invoice_items").delete().eq("invoice_id", id);
   if (itemsError) throw itemsError;
 
   const { error: invoiceError } = await supabase.from("invoices").delete().eq("id", id);
   if (invoiceError) throw invoiceError;
 }
+
 
 export function invalidateWholesaleQueries(queryClient: {
   invalidateQueries: (opts: { queryKey: readonly unknown[] }) => void;

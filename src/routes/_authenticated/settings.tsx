@@ -2,6 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/phoenix/AppShell";
+import { BackupPanel } from "@/components/phoenix/BackupPanel";
+
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -80,7 +82,10 @@ function SettingsPage() {
             <Button onClick={() => save.mutate()} disabled={save.isPending}>{save.isPending ? "Saving…" : "Save changes"}</Button>
           </div>
         </section>
+
+        <BackupPanel />
       </div>
+
     </AppShell>
   );
 }

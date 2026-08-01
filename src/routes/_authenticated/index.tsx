@@ -23,7 +23,7 @@ function DashboardPage() {
     queryFn: async () => {
       const today = new Date().toISOString().slice(0, 10);
       const [invToday, products, shopkeepers, lowStockRes, purchases, activity] = await Promise.all([
-        supabase.from("invoices").select("total, subtotal, invoice_date").gte("invoice_date", today),
+        supabase.from("invoices").select("id, total, subtotal, status, invoice_date").eq("invoice_date", today),
         supabase.from("products").select("id, current_stock, cost_price, min_stock"),
         supabase.from("shopkeepers").select("current_balance"),
         supabase
@@ -43,12 +43,29 @@ function DashboardPage() {
           .limit(6),
       ]);
 
-      const todaySales = (invToday.data ?? []).reduce((s, r) => s + Number(r.total ?? 0), 0);
-      const todayProfit = Math.round(todaySales * 0.18);
+      // Only completed (non-cancelled) invoices count towards today's sales.
+      const todayInvoices = (invToday.data ?? []).filter((r) => r.status !== "cancelled");
+      const todaySales = todayInvoices.reduce((s, r) => s + Number(r.total ?? 0), 0);
+
+      // Real profit: (unit price − product cost) × quantity on today's invoice lines.
+      let todayProfit = 0;
+      const ids = todayInvoices.map((r) => r.id);
+      if (ids.length > 0) {
+        const { data: lines } = await supabase
+          .from("invoice_items")
+          .select("quantity, unit_price, product:products(cost_price)")
+          .in("invoice_id", ids);
+        todayProfit = (lines ?? []).reduce((s, l) => {
+          const cost = Number((l.product as { cost_price?: number } | null)?.cost_price ?? 0);
+          return s + (Number(l.unit_price ?? 0) - cost) * Number(l.quantity ?? 0);
+        }, 0);
+      }
+
       const outstanding = (shopkeepers.data ?? []).reduce((s, r) => s + Number(r.current_balance ?? 0), 0);
       const prods = products.data ?? [];
       const inventoryValue = prods.reduce((s, p) => s + Number(p.cost_price ?? 0) * Number(p.current_stock ?? 0), 0);
       const lowStockCount = prods.filter((p) => Number(p.current_stock ?? 0) <= Number(p.min_stock ?? 0)).length;
+
 
       return {
         todaySales,
