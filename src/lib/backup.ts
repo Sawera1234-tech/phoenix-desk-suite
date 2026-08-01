@@ -150,15 +150,27 @@ export function parseBackup(text: string): BackupFile {
  */
 export async function restoreBackup(file: BackupFile): Promise<number> {
   let restored = 0;
-  for (const table of BACKUP_TABLES) {
-    const rows = file.tables[table] ?? [];
-    if (rows.length === 0) continue;
+  const upsert = async (table: BackupTable, rows: Record<string, unknown>[]) => {
     for (let i = 0; i < rows.length; i += 200) {
       const chunk = rows.slice(i, i + 200);
       const { error } = await supabase.from(table).upsert(chunk as never, { onConflict: "id" });
       if (error) throw new Error(`${table}: ${error.message}`);
       restored += chunk.length;
     }
+  };
+
+  for (const table of BACKUP_TABLES) {
+    await upsert(table, file.tables[table] ?? []);
   }
+
+  // Stock and balance triggers fire while restoring line items and ledger
+  // entries, so replay products and shopkeepers last to restore their exact
+  // recorded values.
+  for (const table of ["products", "shopkeepers"] as BackupTable[]) {
+    const rows = file.tables[table] ?? [];
+    if (rows.length > 0) await upsert(table, rows);
+  }
+
   return restored;
 }
+
