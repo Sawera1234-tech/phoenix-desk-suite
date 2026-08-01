@@ -474,6 +474,19 @@ export async function updateInvoice(id: string, form: InvoiceFormData): Promise<
 }
 
 export async function deleteInvoice(id: string): Promise<void> {
+  // Reverse the outstanding amount this invoice contributed to the customer
+  // balance before removing its ledger entries (ledger deletes do not trigger
+  // a balance recalculation).
+  const { data: existing, error: existingError } = await supabase
+    .from("invoices")
+    .select("shopkeeper_id, total, amount_paid")
+    .eq("id", id)
+    .single();
+  if (existingError) throw existingError;
+
+  const oldRemaining = calcRemaining(Number(existing?.total ?? 0), Number(existing?.amount_paid ?? 0));
+  const shopkeeperId = existing?.shopkeeper_id ?? null;
+
   const { error: ledgerError } = await supabase
     .from("ledger_entries")
     .delete()
@@ -481,12 +494,28 @@ export async function deleteInvoice(id: string): Promise<void> {
     .eq("reference_id", id);
   if (ledgerError) throw ledgerError;
 
+  if (shopkeeperId && oldRemaining !== 0) {
+    const { data: sk, error: skError } = await supabase
+      .from("shopkeepers")
+      .select("current_balance")
+      .eq("id", shopkeeperId)
+      .single();
+    if (skError) throw skError;
+
+    const { error: balError } = await supabase
+      .from("shopkeepers")
+      .update({ current_balance: Number(sk?.current_balance ?? 0) - oldRemaining })
+      .eq("id", shopkeeperId);
+    if (balError) throw balError;
+  }
+
   const { error: itemsError } = await supabase.from("invoice_items").delete().eq("invoice_id", id);
   if (itemsError) throw itemsError;
 
   const { error: invoiceError } = await supabase.from("invoices").delete().eq("id", id);
   if (invoiceError) throw invoiceError;
 }
+
 
 export function invalidateWholesaleQueries(queryClient: {
   invalidateQueries: (opts: { queryKey: readonly unknown[] }) => void;
