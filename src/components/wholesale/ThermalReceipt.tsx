@@ -25,7 +25,7 @@ export type BusinessProfile = {
 
 const BUSINESS_PROFILE_SELECT = "shop_name, owner_name, phone, address, currency, invoice_footer";
 
-async function fetchBusinessProfile(): Promise<BusinessProfile | null> {
+export async function fetchBusinessProfile(): Promise<BusinessProfile | null> {
   const { data, error } = await supabase
     .from("business_profile")
     .select(BUSINESS_PROFILE_SELECT)
