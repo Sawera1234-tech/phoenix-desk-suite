@@ -20,6 +20,7 @@ import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticated/reports'
 import { Route as AuthenticatedPurchasesRouteImport } from './routes/_authenticated/purchases'
 import { Route as AuthenticatedProductsRouteImport } from './routes/_authenticated/products'
+import { Route as AuthenticatedDemandListRouteImport } from './routes/_authenticated/demand-list'
 import { Route as AuthenticatedDailyUsageRouteImport } from './routes/_authenticated/daily-usage'
 import { Route as AuthenticatedCategoriesRouteImport } from './routes/_authenticated/categories'
 import { Route as AuthenticatedBrandsRouteImport } from './routes/_authenticated/brands'
@@ -83,6 +84,11 @@ const AuthenticatedProductsRoute = AuthenticatedProductsRouteImport.update({
   path: '/products',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedDemandListRoute = AuthenticatedDemandListRouteImport.update({
+  id: '/demand-list',
+  path: '/demand-list',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedDailyUsageRoute = AuthenticatedDailyUsageRouteImport.update({
   id: '/daily-usage',
   path: '/daily-usage',
@@ -131,6 +137,7 @@ export interface FileRoutesByFullPath {
   '/brands': typeof AuthenticatedBrandsRoute
   '/categories': typeof AuthenticatedCategoriesRoute
   '/daily-usage': typeof AuthenticatedDailyUsageRoute
+  '/demand-list': typeof AuthenticatedDemandListRoute
   '/products': typeof AuthenticatedProductsRoute
   '/purchases': typeof AuthenticatedPurchasesRoute
   '/reports': typeof AuthenticatedReportsRoute
@@ -149,6 +156,7 @@ export interface FileRoutesByTo {
   '/brands': typeof AuthenticatedBrandsRoute
   '/categories': typeof AuthenticatedCategoriesRoute
   '/daily-usage': typeof AuthenticatedDailyUsageRoute
+  '/demand-list': typeof AuthenticatedDemandListRoute
   '/products': typeof AuthenticatedProductsRoute
   '/purchases': typeof AuthenticatedPurchasesRoute
   '/reports': typeof AuthenticatedReportsRoute
@@ -170,6 +178,7 @@ export interface FileRoutesById {
   '/_authenticated/brands': typeof AuthenticatedBrandsRoute
   '/_authenticated/categories': typeof AuthenticatedCategoriesRoute
   '/_authenticated/daily-usage': typeof AuthenticatedDailyUsageRoute
+  '/_authenticated/demand-list': typeof AuthenticatedDemandListRoute
   '/_authenticated/products': typeof AuthenticatedProductsRoute
   '/_authenticated/purchases': typeof AuthenticatedPurchasesRoute
   '/_authenticated/reports': typeof AuthenticatedReportsRoute
@@ -192,6 +201,7 @@ export interface FileRouteTypes {
     | '/brands'
     | '/categories'
     | '/daily-usage'
+    | '/demand-list'
     | '/products'
     | '/purchases'
     | '/reports'
@@ -210,6 +220,7 @@ export interface FileRouteTypes {
     | '/brands'
     | '/categories'
     | '/daily-usage'
+    | '/demand-list'
     | '/products'
     | '/purchases'
     | '/reports'
@@ -230,6 +241,7 @@ export interface FileRouteTypes {
     | '/_authenticated/brands'
     | '/_authenticated/categories'
     | '/_authenticated/daily-usage'
+    | '/_authenticated/demand-list'
     | '/_authenticated/products'
     | '/_authenticated/purchases'
     | '/_authenticated/reports'
@@ -331,6 +343,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProductsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/demand-list': {
+      id: '/_authenticated/demand-list'
+      path: '/demand-list'
+      fullPath: '/demand-list'
+      preLoaderRoute: typeof AuthenticatedDemandListRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/daily-usage': {
       id: '/_authenticated/daily-usage'
       path: '/daily-usage'
@@ -387,6 +406,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedBrandsRoute: typeof AuthenticatedBrandsRoute
   AuthenticatedCategoriesRoute: typeof AuthenticatedCategoriesRoute
   AuthenticatedDailyUsageRoute: typeof AuthenticatedDailyUsageRoute
+  AuthenticatedDemandListRoute: typeof AuthenticatedDemandListRoute
   AuthenticatedProductsRoute: typeof AuthenticatedProductsRoute
   AuthenticatedPurchasesRoute: typeof AuthenticatedPurchasesRoute
   AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
@@ -401,6 +421,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedBrandsRoute: AuthenticatedBrandsRoute,
   AuthenticatedCategoriesRoute: AuthenticatedCategoriesRoute,
   AuthenticatedDailyUsageRoute: AuthenticatedDailyUsageRoute,
+  AuthenticatedDemandListRoute: AuthenticatedDemandListRoute,
   AuthenticatedProductsRoute: AuthenticatedProductsRoute,
   AuthenticatedPurchasesRoute: AuthenticatedPurchasesRoute,
   AuthenticatedReportsRoute: AuthenticatedReportsRoute,
