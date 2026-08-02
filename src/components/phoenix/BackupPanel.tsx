@@ -19,10 +19,13 @@ import {
   downloadBackup,
   parseBackup,
   readAllSlots,
+  readSettings,
   restoreBackup,
   runAutoBackup,
+  writeSettings,
   type BackupCadence,
   type BackupFile,
+  type BackupSettings,
   type BackupSlot,
 } from "@/lib/backup";
 import { DatabaseBackup, Download, RotateCcw, Upload, Loader2 } from "lucide-react";
