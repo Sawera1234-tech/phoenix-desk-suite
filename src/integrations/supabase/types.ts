@@ -111,28 +111,34 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
+          discount: number
           id: string
           notes: string | null
           product_id: string
           quantity: number
+          unit_price: number | null
           usage_date: string
         }
         Insert: {
           created_at?: string
           created_by?: string | null
+          discount?: number
           id?: string
           notes?: string | null
           product_id: string
           quantity: number
+          unit_price?: number | null
           usage_date?: string
         }
         Update: {
           created_at?: string
           created_by?: string | null
+          discount?: number
           id?: string
           notes?: string | null
           product_id?: string
           quantity?: number
+          unit_price?: number | null
           usage_date?: string
         }
         Relationships: [
@@ -320,10 +326,12 @@ export type Database = {
           id: string
           image_url: string | null
           is_active: boolean
+          max_stock: number
           min_stock: number
           name: string
           retail_price: number
           supplier_id: string | null
+          unit: string
           updated_at: string
           wholesale_price: number
         }
@@ -338,10 +346,12 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_active?: boolean
+          max_stock?: number
           min_stock?: number
           name: string
           retail_price?: number
           supplier_id?: string | null
+          unit?: string
           updated_at?: string
           wholesale_price?: number
         }
@@ -356,10 +366,12 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_active?: boolean
+          max_stock?: number
           min_stock?: number
           name?: string
           retail_price?: number
           supplier_id?: string | null
+          unit?: string
           updated_at?: string
           wholesale_price?: number
         }
