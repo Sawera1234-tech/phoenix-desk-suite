@@ -43,6 +43,8 @@ type Product = {
   wholesale_price: number;
   current_stock: number;
   min_stock: number;
+  max_stock: number;
+  unit: string;
   is_active: boolean;
 };
 
@@ -55,6 +57,8 @@ type FormState = {
   wholesale_price: string;
   current_stock: string;
   min_stock: string;
+  max_stock: string;
+  unit: string;
 };
 
 const emptyForm: FormState = {
@@ -66,6 +70,8 @@ const emptyForm: FormState = {
   wholesale_price: "",
   current_stock: "",
   min_stock: "",
+  max_stock: "",
+  unit: "pcs",
 };
 
 function toForm(p: Product): FormState {
@@ -78,6 +84,8 @@ function toForm(p: Product): FormState {
     wholesale_price: String(p.wholesale_price ?? 0),
     current_stock: String(p.current_stock ?? 0),
     min_stock: String(p.min_stock ?? 0),
+    max_stock: String(p.max_stock ?? 0),
+    unit: p.unit ?? "pcs",
   };
 }
 
@@ -194,6 +202,8 @@ function ProductsPage() {
               <Detail label="Stock Value" value={fmtRs(viewing.current_stock * viewing.cost_price)} />
               <Detail label="Current Stock" value={String(viewing.current_stock)} />
               <Detail label="Min Stock" value={String(viewing.min_stock)} />
+              <Detail label="Max Stock" value={String(viewing.max_stock ?? 0)} />
+              <Detail label="Unit" value={viewing.unit ?? "pcs"} />
               <div className="col-span-2">
                 <Detail label="Description" value={viewing.description || "—"} />
               </div>
@@ -278,6 +288,8 @@ function ProductDialog({
         wholesale_price: Number(form.wholesale_price) || 0,
         current_stock: Number(form.current_stock) || 0,
         min_stock: Number(form.min_stock) || 0,
+        max_stock: Number(form.max_stock) || 0,
+        unit: form.unit.trim() || "pcs",
       };
       if (!payload.code || !payload.name) throw new Error("Code and name are required");
       const { error } = product
@@ -312,6 +324,8 @@ function ProductDialog({
           <div className="space-y-1.5"><Label>Wholesale Price</Label><Input type="number" step="0.01" value={form.wholesale_price} onChange={(e) => setForm({ ...form, wholesale_price: e.target.value })} /></div>
           <div className="space-y-1.5"><Label>{product ? "Stock" : "Opening Stock"}</Label><Input type="number" value={form.current_stock} onChange={(e) => setForm({ ...form, current_stock: e.target.value })} /></div>
           <div className="space-y-1.5"><Label>Min Stock</Label><Input type="number" value={form.min_stock} onChange={(e) => setForm({ ...form, min_stock: e.target.value })} /></div>
+          <div className="space-y-1.5"><Label>Max Stock</Label><Input type="number" value={form.max_stock} onChange={(e) => setForm({ ...form, max_stock: e.target.value })} placeholder="Target level for demand list" /></div>
+          <div className="space-y-1.5"><Label>Unit</Label><Input value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} placeholder="pcs" /></div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
