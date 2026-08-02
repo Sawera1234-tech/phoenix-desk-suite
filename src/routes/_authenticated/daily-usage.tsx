@@ -2,65 +2,38 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/phoenix/AppShell";
-import { DataTable } from "@/components/phoenix/DataTable";
 import { fmtDate } from "@/lib/format";
 import { fmtRs } from "@/lib/wholesale";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Eye, Pencil, Trash2, Search, Loader2, X, Save } from "lucide-react";
+import { Search, Loader2, X, Save } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/daily-usage")({
   head: () => ({
     meta: [
       { title: "Daily Usage · Project Phoenix" },
-      { name: "description", content: "Log and review parts consumed by daily repair work, with automatic stock deduction." },
+      { name: "description", content: "Log parts consumed by daily repair work, with automatic stock deduction and live profit." },
     ],
   }),
   component: UsagePage,
 });
-
-type Row = {
-  id: string;
-  usage_date: string;
-  quantity: number;
-  notes: string | null;
-  product_id: string;
-  product: { code: string; name: string } | null;
-};
 
 type DraftItem = {
   product_id: string;
   code: string;
   name: string;
   price: number;
+  cost: number;
+  discount: number;
   stock: number;
   quantity: number;
   notes: string;
 };
 
-type SortMode =
-  | "price_desc"
-  | "price_asc"
-  | "qty_desc"
-  | "qty_asc"
-  | "name_asc"
-  | "name_desc";
+type SortMode = "price_desc" | "price_asc" | "qty_desc" | "qty_asc" | "name_asc" | "name_desc";
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const draftKey = (d: string) => `phoenix.daily-usage.draft.${d}`;
@@ -69,30 +42,18 @@ function loadDraft(date: string): DraftItem[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = window.localStorage.getItem(draftKey(date));
-    return raw ? (JSON.parse(raw) as DraftItem[]) : [];
+    const items = raw ? (JSON.parse(raw) as DraftItem[]) : [];
+    return items.map((i) => ({ ...i, discount: Number(i.discount ?? 0), cost: Number(i.cost ?? 0) }));
   } catch {
     return [];
   }
 }
 
+const lineTotal = (i: DraftItem) => Math.max(0, (i.price - i.discount) * i.quantity);
+const lineProfit = (i: DraftItem) => (i.price - i.discount - i.cost) * i.quantity;
+
 function UsagePage() {
   const qc = useQueryClient();
-  const [viewing, setViewing] = useState<Row | null>(null);
-  const [editing, setEditing] = useState<Row | null>(null);
-  const [deleting, setDeleting] = useState<Row | null>(null);
-
-  const { data = [], isLoading } = useQuery({
-    queryKey: ["daily-usage"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("daily_usage")
-        .select("id, usage_date, quantity, notes, product_id, product:products(code, name)")
-        .order("usage_date", { ascending: false })
-        .limit(500);
-      if (error) throw error;
-      return data as unknown as Row[];
-    },
-  });
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["daily-usage"] });
@@ -100,122 +61,14 @@ function UsagePage() {
     qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
     qc.invalidateQueries({ queryKey: ["reports"] });
     qc.invalidateQueries({ queryKey: ["low-stock"] });
+    qc.invalidateQueries({ queryKey: ["demand-list"] });
   };
-
-  const remove = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("daily_usage").delete().eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success("Usage entry deleted — stock restored");
-      setDeleting(null);
-      refresh();
-    },
-    onError: (e: Error) => toast.error(e.message || "Could not delete entry"),
-  });
-
-  const flat = useMemo(
-    () => data.map((r) => ({ ...r, product_code: r.product?.code ?? "", product_name: r.product?.name ?? "" })),
-    [data],
-  );
-
-  type FlatRow = (typeof flat)[number];
 
   return (
     <AppShell title="Daily Usage" subtitle="Repair Consumption Log">
       <div className="mx-auto max-w-[1400px] space-y-4 p-6 xl:p-8">
         <UsageComposer onSaved={refresh} />
-
-        <DataTable<FlatRow>
-          rows={flat}
-          isLoading={isLoading}
-          rowKey={(r) => r.id}
-          searchKeys={["product_code", "product_name", "notes", "usage_date"]}
-          searchPlaceholder="Search product, date or note…"
-          initialSort={{ key: "usage_date", dir: "desc" }}
-          emptyMessage="No usage recorded yet."
-          columns={[
-            { key: "usage_date", label: "Date", render: (r) => fmtDate(r.usage_date) },
-            { key: "product_code", label: "Code", render: (r) => <span className="font-mono text-[12px] font-semibold">{r.product_code}</span> },
-            { key: "product_name", label: "Product" },
-            { key: "quantity", label: "Qty", align: "right", render: (r) => <span className="font-semibold text-destructive">-{r.quantity}</span> },
-            { key: "notes", label: "Notes" },
-            {
-              key: "actions",
-              label: "Actions",
-              align: "right",
-              sortable: false,
-              render: (r) => (
-                <div className="flex items-center justify-end gap-1">
-                  <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="View entry" onClick={() => setViewing(r)}>
-                    <Eye className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Edit entry" onClick={() => setEditing(r)}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-destructive hover:text-destructive"
-                    aria-label="Delete entry"
-                    onClick={() => setDeleting(r)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              ),
-            },
-          ]}
-        />
       </div>
-
-      <Dialog open={!!viewing} onOpenChange={(o) => !o && setViewing(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Usage Entry</DialogTitle></DialogHeader>
-          {viewing && (
-            <dl className="grid grid-cols-2 gap-3 text-[13px]">
-              <div><dt className="text-[11px] uppercase text-muted-foreground">Date</dt><dd className="font-medium">{fmtDate(viewing.usage_date)}</dd></div>
-              <div><dt className="text-[11px] uppercase text-muted-foreground">Quantity</dt><dd className="font-medium">{viewing.quantity}</dd></div>
-              <div><dt className="text-[11px] uppercase text-muted-foreground">Code</dt><dd className="font-mono font-medium">{viewing.product?.code ?? "—"}</dd></div>
-              <div><dt className="text-[11px] uppercase text-muted-foreground">Product</dt><dd className="font-medium">{viewing.product?.name ?? "—"}</dd></div>
-              <div className="col-span-2"><dt className="text-[11px] uppercase text-muted-foreground">Notes</dt><dd className="font-medium">{viewing.notes || "—"}</dd></div>
-            </dl>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setViewing(null)}>Close</Button>
-            <Button onClick={() => { setEditing(viewing); setViewing(null); }}>Edit</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <UsageDialog
-        entry={editing ?? undefined}
-        open={!!editing}
-        onOpenChange={(o) => !o && setEditing(null)}
-        onSaved={refresh}
-      />
-
-      <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this usage entry?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {deleting?.quantity} unit(s) of {deleting?.product?.name ?? "the product"} will be added back to stock.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={(e) => { e.preventDefault(); if (deleting) remove.mutate(deleting.id); }}
-              disabled={remove.isPending}
-            >
-              {remove.isPending ? "Deleting…" : "Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </AppShell>
   );
 }
@@ -270,6 +123,9 @@ function UsageComposer({ onSaved }: { onSaved: () => void }) {
 
   const results = debounced.length > 0 ? search.data ?? [] : [];
 
+  const patch = (id: string, fields: Partial<DraftItem>) =>
+    setItems((prev) => prev.map((p) => (p.product_id === id ? { ...p, ...fields } : p)));
+
   function addProduct(p: { id: string; code: string; name: string; current_stock: number | null; retail_price: number | null; cost_price: number | null }) {
     setItems((prev) => {
       const existing = prev.find((i) => i.product_id === p.id);
@@ -283,7 +139,10 @@ function UsageComposer({ onSaved }: { onSaved: () => void }) {
           product_id: p.id,
           code: p.code,
           name: p.name,
-          price: Number(p.retail_price ?? p.cost_price ?? 0),
+          // Default retail price, editable inline before saving.
+          price: Number(p.retail_price ?? 0),
+          cost: Number(p.cost_price ?? 0),
+          discount: 0,
           stock: Number(p.current_stock ?? 0),
           quantity: 1,
           notes: "",
@@ -312,7 +171,8 @@ function UsageComposer({ onSaved }: { onSaved: () => void }) {
   }, [items, sortMode]);
 
   const totalUnits = items.reduce((s, i) => s + i.quantity, 0);
-  const totalValue = items.reduce((s, i) => s + i.quantity * i.price, 0);
+  const grandTotal = items.reduce((s, i) => s + lineTotal(i), 0);
+  const totalProfit = items.reduce((s, i) => s + lineProfit(i), 0);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -324,6 +184,9 @@ function UsageComposer({ onSaved }: { onSaved: () => void }) {
           product_id: i.product_id,
           quantity: i.quantity,
           usage_date: date,
+          // Effective (edited) price is what sales and profit reports use.
+          unit_price: Math.max(0, i.price - i.discount),
+          discount: i.discount,
           notes: i.notes || null,
           created_by: userData.user?.id ?? null,
         }));
@@ -418,14 +281,16 @@ function UsageComposer({ onSaved }: { onSaved: () => void }) {
             Nothing added yet today. Start typing above to find a product.
           </p>
         ) : (
-          <div className="overflow-hidden rounded-xl border border-border">
+          <div className="overflow-x-auto rounded-xl border border-border">
             <table className="w-full text-[13px]">
               <thead className="bg-muted/60 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="px-4 py-2 font-semibold">Product</th>
                   <th className="px-4 py-2 text-right font-semibold">Price</th>
+                  <th className="px-4 py-2 text-right font-semibold">Discount</th>
                   <th className="px-4 py-2 text-right font-semibold">Qty</th>
-                  <th className="px-4 py-2 text-right font-semibold">Value</th>
+                  <th className="px-4 py-2 text-right font-semibold">Line Total</th>
+                  <th className="px-4 py-2 text-right font-semibold">Profit</th>
                   <th className="px-4 py-2 font-semibold">Note</th>
                   <th className="px-4 py-2 text-right font-semibold">Remove</th>
                 </tr>
@@ -437,37 +302,49 @@ function UsageComposer({ onSaved }: { onSaved: () => void }) {
                       <div className="font-medium">{it.name}</div>
                       <div className="font-mono text-[11px] text-muted-foreground">{it.code} · stock {it.stock}</div>
                     </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums">{fmtRs(it.price)}</td>
+                    <td className="px-4 py-2.5 text-right">
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={it.price}
+                        aria-label={`Price for ${it.name}`}
+                        onChange={(e) => patch(it.product_id, { price: Math.max(0, Number(e.target.value) || 0) })}
+                        className="ml-auto h-8 w-24 text-right"
+                      />
+                    </td>
+                    <td className="px-4 py-2.5 text-right">
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={it.discount}
+                        aria-label={`Discount for ${it.name}`}
+                        onChange={(e) => patch(it.product_id, { discount: Math.max(0, Number(e.target.value) || 0) })}
+                        className="ml-auto h-8 w-24 text-right"
+                      />
+                    </td>
                     <td className="px-4 py-2.5 text-right">
                       <Input
                         type="number"
                         min="1"
                         value={it.quantity}
                         aria-label={`Quantity for ${it.name}`}
-                        onChange={(e) =>
-                          setItems((prev) =>
-                            prev.map((p) =>
-                              p.product_id === it.product_id
-                                ? { ...p, quantity: Math.max(1, Number(e.target.value) || 1) }
-                                : p,
-                            ),
-                          )
-                        }
+                        onChange={(e) => patch(it.product_id, { quantity: Math.max(1, Number(e.target.value) || 1) })}
                         className="ml-auto h-8 w-20 text-right"
                       />
                     </td>
-                    <td className="px-4 py-2.5 text-right font-semibold tabular-nums">{fmtRs(it.price * it.quantity)}</td>
+                    <td className="px-4 py-2.5 text-right font-semibold tabular-nums">{fmtRs(lineTotal(it))}</td>
+                    <td className={`px-4 py-2.5 text-right font-semibold tabular-nums ${lineProfit(it) < 0 ? "text-destructive" : "text-success"}`}>
+                      {fmtRs(lineProfit(it))}
+                    </td>
                     <td className="px-4 py-2.5">
                       <Input
                         value={it.notes}
                         aria-label={`Note for ${it.name}`}
                         placeholder="Optional note"
-                        onChange={(e) =>
-                          setItems((prev) =>
-                            prev.map((p) => (p.product_id === it.product_id ? { ...p, notes: e.target.value } : p)),
-                          )
-                        }
-                        className="h-8"
+                        onChange={(e) => patch(it.product_id, { notes: e.target.value })}
+                        className="h-8 min-w-[140px]"
                       />
                     </td>
                     <td className="px-4 py-2.5 text-right">
@@ -488,8 +365,12 @@ function UsageComposer({ onSaved }: { onSaved: () => void }) {
                 <tr className="border-t border-border bg-muted/40 text-[12.5px] font-semibold">
                   <td className="px-4 py-2.5">{items.length} product(s)</td>
                   <td />
+                  <td />
                   <td className="px-4 py-2.5 text-right tabular-nums">{totalUnits}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums">{fmtRs(totalValue)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums">{fmtRs(grandTotal)}</td>
+                  <td className={`px-4 py-2.5 text-right tabular-nums ${totalProfit < 0 ? "text-destructive" : "text-success"}`}>
+                    {fmtRs(totalProfit)}
+                  </td>
                   <td colSpan={2} />
                 </tr>
               </tfoot>
@@ -498,76 +379,5 @@ function UsageComposer({ onSaved }: { onSaved: () => void }) {
         )}
       </div>
     </section>
-  );
-}
-
-function UsageDialog({
-  entry,
-  open,
-  onOpenChange,
-  onSaved,
-}: {
-  entry?: { id: string; product_id: string; quantity: number; notes: string | null; usage_date: string };
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSaved: () => void;
-}) {
-  const [quantity, setQuantity] = useState("1");
-  const [usageDate, setUsageDate] = useState(todayStr);
-  const [notes, setNotes] = useState("");
-
-  useEffect(() => {
-    if (!open) return;
-    setQuantity(String(entry?.quantity ?? 1));
-    setUsageDate(entry?.usage_date ?? todayStr());
-    setNotes(entry?.notes ?? "");
-  }, [open, entry]);
-
-  const save = useMutation({
-    mutationFn: async () => {
-      if (!entry) throw new Error("No entry selected");
-      const qty = Number(quantity) || 0;
-      if (qty <= 0) throw new Error("Quantity must be greater than zero");
-
-      // Stock is adjusted by insert/delete triggers, so an edit is applied as
-      // a delete + re-insert to keep product stock accurate.
-      const { error: delError } = await supabase.from("daily_usage").delete().eq("id", entry.id);
-      if (delError) throw delError;
-
-      const { data: userData } = await supabase.auth.getUser();
-      const { error } = await supabase.from("daily_usage").insert({
-        product_id: entry.product_id,
-        quantity: qty,
-        usage_date: usageDate,
-        notes: notes || null,
-        created_by: userData.user?.id ?? null,
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success("Usage updated — stock adjusted");
-      onOpenChange(false);
-      onSaved();
-    },
-    onError: (e: Error) => toast.error(e.message || "Save failed"),
-  });
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader><DialogTitle>Edit Usage Entry</DialogTitle></DialogHeader>
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5"><Label>Quantity *</Label><Input type="number" min="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} /></div>
-            <div className="space-y-1.5"><Label>Date</Label><Input type="date" value={usageDate} onChange={(e) => setUsageDate(e.target.value)} /></div>
-          </div>
-          <div className="space-y-1.5"><Label>Notes</Label><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Used for iPhone 13 screen repair — counter #2" /></div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={() => save.mutate()} disabled={save.isPending}>{save.isPending ? "Saving…" : "Save Changes"}</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
