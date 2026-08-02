@@ -36,11 +36,15 @@ const CADENCES: { key: BackupCadence; label: string }[] = [
 export function BackupPanel() {
   const qc = useQueryClient();
   const [slots, setSlots] = useState<BackupSlot[]>([]);
+  const [settings, setSettings] = useState<BackupSettings>({ auto: true, last_run: null, last_status: "idle", last_message: null });
   const [busy, setBusy] = useState<string | null>(null);
   const [pending, setPending] = useState<BackupFile | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
-  const refreshSlots = () => setSlots(readAllSlots());
+  const refreshSlots = () => {
+    setSlots(readAllSlots());
+    setSettings(readSettings());
+  };
 
   // Automatic offline backup: runs quietly when the browser is idle so it never
   // competes with the UI.
@@ -48,10 +52,8 @@ export function BackupPanel() {
     refreshSlots();
     const run = () => {
       runAutoBackup()
-        .then((done) => {
-          if (done.length > 0) refreshSlots();
-        })
-        .catch(() => undefined);
+        .then(() => refreshSlots())
+        .catch(() => refreshSlots());
     };
     const w = window as Window & { requestIdleCallback?: (cb: () => void) => number };
     const id = w.requestIdleCallback ? w.requestIdleCallback(run) : window.setTimeout(run, 3000);
@@ -59,6 +61,26 @@ export function BackupPanel() {
       if (!w.requestIdleCallback) window.clearTimeout(id as number);
     };
   }, []);
+
+  function toggleAuto(next: boolean) {
+    setSettings(writeSettings({ auto: next }));
+    toast.success(next ? "Automatic backup enabled" : "Automatic backup paused");
+  }
+
+  async function handleBackupAll() {
+    setBusy("all");
+    try {
+      for (const c of CADENCES) await backupNow(c.key);
+      refreshSlots();
+      toast.success("Backup completed");
+    } catch (e) {
+      refreshSlots();
+      toast.error((e as Error).message || "Backup failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
 
   async function handleBackupNow(cadence: BackupCadence) {
     setBusy(cadence);
