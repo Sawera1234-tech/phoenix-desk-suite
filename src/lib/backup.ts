@@ -43,6 +43,32 @@ export interface BackupSlot {
 }
 
 const SLOT_KEY = (c: BackupCadence) => `phoenix.backup.${c}`;
+const SETTINGS_KEY = "phoenix.backup.settings";
+
+export interface BackupSettings {
+  auto: boolean;
+  last_run: string | null;
+  last_status: "idle" | "ok" | "error";
+  last_message: string | null;
+}
+
+const DEFAULT_SETTINGS: BackupSettings = { auto: true, last_run: null, last_status: "idle", last_message: null };
+
+export function readSettings(): BackupSettings {
+  if (typeof window === "undefined") return DEFAULT_SETTINGS;
+  try {
+    const raw = window.localStorage.getItem(SETTINGS_KEY);
+    return raw ? { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<BackupSettings>) } : DEFAULT_SETTINGS;
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+}
+
+export function writeSettings(patch: Partial<BackupSettings>): BackupSettings {
+  const next = { ...readSettings(), ...patch };
+  if (typeof window !== "undefined") window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
+  return next;
+}
 
 function periodStamp(cadence: BackupCadence, d = new Date()): string {
   if (cadence === "daily") return d.toISOString().slice(0, 10);
