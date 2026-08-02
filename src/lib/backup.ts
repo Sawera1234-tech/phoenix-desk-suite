@@ -139,16 +139,31 @@ export function isSlotDue(cadence: BackupCadence): boolean {
  * every page load — it exits immediately when nothing is due.
  */
 export async function runAutoBackup(): Promise<BackupCadence[]> {
+  if (!readSettings().auto) return [];
   const due = (["daily", "weekly", "monthly"] as BackupCadence[]).filter(isSlotDue);
   if (due.length === 0) return [];
-  const file = await createBackup(due[0]);
-  for (const cadence of due) writeSlot(cadence, { ...file, cadence });
-  return due;
+  try {
+    const file = await createBackup(due[0]);
+    for (const cadence of due) writeSlot(cadence, { ...file, cadence });
+    writeSettings({ last_run: file.created_at, last_status: "ok", last_message: `${due.join(", ")} backup saved` });
+    return due;
+  } catch (e) {
+    writeSettings({ last_status: "error", last_message: (e as Error).message });
+    throw e;
+  }
 }
 
 export async function backupNow(cadence: BackupCadence): Promise<BackupSlot> {
-  const file = await createBackup(cadence);
-  writeSlot(cadence, file);
+  try {
+    const file = await createBackup(cadence);
+    writeSlot(cadence, file);
+    writeSettings({ last_run: file.created_at, last_status: "ok", last_message: `${cadence} backup saved` });
+    return readSlot(cadence)!;
+  } catch (e) {
+    writeSettings({ last_status: "error", last_message: (e as Error).message });
+    throw e;
+  }
+}
   return readSlot(cadence)!;
 }
 
