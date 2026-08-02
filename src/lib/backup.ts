@@ -164,8 +164,6 @@ export async function backupNow(cadence: BackupCadence): Promise<BackupSlot> {
     throw e;
   }
 }
-  return readSlot(cadence)!;
-}
 
 export function downloadBackup(file: BackupFile, label = file.cadence) {
   const blob = new Blob([JSON.stringify(file, null, 2)], { type: "application/json" });
