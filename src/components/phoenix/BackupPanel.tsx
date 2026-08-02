@@ -19,10 +19,13 @@ import {
   downloadBackup,
   parseBackup,
   readAllSlots,
+  readSettings,
   restoreBackup,
   runAutoBackup,
+  writeSettings,
   type BackupCadence,
   type BackupFile,
+  type BackupSettings,
   type BackupSlot,
 } from "@/lib/backup";
 import { DatabaseBackup, Download, RotateCcw, Upload, Loader2 } from "lucide-react";
@@ -36,11 +39,15 @@ const CADENCES: { key: BackupCadence; label: string }[] = [
 export function BackupPanel() {
   const qc = useQueryClient();
   const [slots, setSlots] = useState<BackupSlot[]>([]);
+  const [settings, setSettings] = useState<BackupSettings>({ auto: true, last_run: null, last_status: "idle", last_message: null });
   const [busy, setBusy] = useState<string | null>(null);
   const [pending, setPending] = useState<BackupFile | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
-  const refreshSlots = () => setSlots(readAllSlots());
+  const refreshSlots = () => {
+    setSlots(readAllSlots());
+    setSettings(readSettings());
+  };
 
   // Automatic offline backup: runs quietly when the browser is idle so it never
   // competes with the UI.
@@ -48,10 +55,8 @@ export function BackupPanel() {
     refreshSlots();
     const run = () => {
       runAutoBackup()
-        .then((done) => {
-          if (done.length > 0) refreshSlots();
-        })
-        .catch(() => undefined);
+        .then(() => refreshSlots())
+        .catch(() => refreshSlots());
     };
     const w = window as Window & { requestIdleCallback?: (cb: () => void) => number };
     const id = w.requestIdleCallback ? w.requestIdleCallback(run) : window.setTimeout(run, 3000);
@@ -59,6 +64,26 @@ export function BackupPanel() {
       if (!w.requestIdleCallback) window.clearTimeout(id as number);
     };
   }, []);
+
+  function toggleAuto(next: boolean) {
+    setSettings(writeSettings({ auto: next }));
+    toast.success(next ? "Automatic backup enabled" : "Automatic backup paused");
+  }
+
+  async function handleBackupAll() {
+    setBusy("all");
+    try {
+      for (const c of CADENCES) await backupNow(c.key);
+      refreshSlots();
+      toast.success("Backup completed");
+    } catch (e) {
+      refreshSlots();
+      toast.error((e as Error).message || "Backup failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
 
   async function handleBackupNow(cadence: BackupCadence) {
     setBusy(cadence);
@@ -126,16 +151,48 @@ export function BackupPanel() {
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" className="gap-1.5" disabled={busy === "all"} onClick={handleBackupAll}>
+            {busy === "all" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <DatabaseBackup className="h-3.5 w-3.5" />} Backup now
+          </Button>
           <Button variant="outline" size="sm" className="gap-1.5" disabled={busy === "download"} onClick={() => handleDownload()}>
             {busy === "download" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Download backup
           </Button>
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => fileRef.current?.click()}>
-            <Upload className="h-3.5 w-3.5" /> Restore from file
+            <Upload className="h-3.5 w-3.5" /> Restore backup
+          </Button>
+          <Button variant={settings.auto ? "secondary" : "outline"} size="sm" onClick={() => toggleAuto(!settings.auto)}>
+            {settings.auto ? "Auto backup: On" : "Auto backup: Off"}
           </Button>
           <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={handleFile} aria-label="Backup file" />
         </div>
       </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+        <div className="rounded-xl border border-border bg-muted/25 p-4">
+          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Last backup</div>
+          <div className="mt-1 text-[13px] font-semibold text-foreground">
+            {settings.last_run ? fmtDateTime(settings.last_run) : "Never"}
+          </div>
+        </div>
+        <div className="rounded-xl border border-border bg-muted/25 p-4">
+          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Status</div>
+          <div
+            className={`mt-1 text-[13px] font-semibold ${
+              settings.last_status === "error" ? "text-destructive" : settings.last_status === "ok" ? "text-success" : "text-foreground"
+            }`}
+          >
+            {settings.last_status === "error" ? "Failed" : settings.last_status === "ok" ? "Healthy" : "Waiting"}
+          </div>
+          <p className="mt-0.5 truncate text-[11.5px] text-muted-foreground">{settings.last_message ?? "No backup run yet."}</p>
+        </div>
+        <div className="rounded-xl border border-border bg-muted/25 p-4">
+          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Automatic backup</div>
+          <div className="mt-1 text-[13px] font-semibold text-foreground">{settings.auto ? "Enabled" : "Paused"}</div>
+          <p className="mt-0.5 text-[11.5px] text-muted-foreground">Runs in the background when the browser is idle.</p>
+        </div>
+      </div>
+
 
       <div className="mt-5 grid gap-3 sm:grid-cols-3">
         {CADENCES.map((c) => {

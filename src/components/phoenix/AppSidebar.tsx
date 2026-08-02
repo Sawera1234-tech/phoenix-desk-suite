@@ -13,6 +13,7 @@ import {
   LogOut,
   Tag,
   Layers,
+  ListChecks,
 } from "lucide-react";
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
@@ -29,6 +30,7 @@ const workspace: Item[] = [
   { title: "Suppliers", icon: Truck, to: "/suppliers" },
   { title: "Purchases", icon: ShoppingCart, to: "/purchases" },
   { title: "Daily Usage", icon: ClipboardList, to: "/daily-usage" },
+  { title: "Demand List", icon: ListChecks, to: "/demand-list" },
 ];
 
 const operations: Item[] = [
