@@ -70,22 +70,6 @@ function DemandListPage() {
     )
     .slice(0, 8);
   }, [productSearch, rows, selectedProducts]);
-  const suggestions = useMemo(() => {
-  if (!productSearch.trim()) return [];
-
-  const q = productSearch.toLowerCase();
-
-  return rows
-    .filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        p.code.toLowerCase().includes(q)
-    )
-    .filter(
-      (p) => !selectedProducts.some((x) => x.id === p.id)
-    )
-    .slice(0, 8);
-  }, [productSearch, rows, selectedProducts]);
 
   // Categories stay in sync with the Categories module automatically.
   const { data: categories = [] } = useQuery({
@@ -103,7 +87,7 @@ function DemandListPage() {
   });
 
   const visible = useMemo(() => {
-  const allRows = [...rows, ...manualItems];
+  const allRows = [...rows, ...manualItems, ...selectedProducts];
 
   const q = term.trim().toLowerCase();
 
@@ -123,6 +107,7 @@ function DemandListPage() {
 
   const pending = visible.filter((r) => !ordered.includes(r.id));
   const groups = groupByCategory(sortMode === "category" ? visible : visible);
+  const finalProducts = [...pending, ...selectedProducts];
 
   function markOrdered(ids: string[]) {
     const next = [...new Set([...ordered, ...ids])];
@@ -230,9 +215,20 @@ function DemandListPage() {
           type="button"
           className="flex w-full items-center justify-between px-3 py-2 hover:bg-muted text-left"
           onClick={() => {
-            setSelectedProducts((prev) => [...prev, item]);
-            setProductSearch("");
-          }}
+  setSelectedProducts((prev) => {
+    if (prev.find((x) => x.id === item.id)) return prev;
+
+    return [
+      ...prev,
+      {
+        ...item,
+        required: 1,
+      },
+    ];
+  });
+
+  setProductSearch("");
+}}
         >
           <div>
             <div className="font-medium">{item.name}</div>
@@ -280,53 +276,88 @@ function DemandListPage() {
           </div>
 
           {isLoading ? (
-            <p className="px-6 py-10 text-center text-[12.5px] text-muted-foreground">Loading demand list…</p>
-          ) : visible.length === 0 ? (
-            <p className="px-6 py-10 text-center text-[12.5px] text-muted-foreground">
-              Nothing to reorder — all stock is above the minimum level.
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-[13px]">
-                <thead className="sticky top-0 z-10 bg-muted/70 text-left text-[11px] uppercase tracking-wide text-muted-foreground backdrop-blur">
-                  <tr>
-                    <th className="px-6 py-2.5 font-semibold">Product</th>
-                    <th className="px-4 py-2.5 font-semibold">Category</th>
-                    <th className="px-4 py-2.5 text-right font-semibold">Current Stock</th>
-                    <th className="px-4 py-2.5 text-right font-semibold">Min Stock</th>
-                    <th className="px-4 py-2.5 text-right font-semibold">Required Qty</th>
-                    <th className="px-4 py-2.5 font-semibold">Unit</th>
-                    <th className="px-6 py-2.5 text-right font-semibold">Action</th>
-                  </tr>
-                </thead>
-                {groups.map((g) => (
-                  <tbody key={g.category}>
-                    <tr>
-                      <td colSpan={7} className="bg-primary-soft/60 px-6 py-2 text-[11.5px] font-semibold uppercase tracking-wide text-primary">
-                        {g.category} · {g.rows.length} product(s)
-                      </td>
-                    </tr>
-                    {g.rows.map((r, i) => (
-                      <DemandRowView
-                        key={r.id}
-                        row={r}
-                        striped={i % 2 === 1}
-                        ordered={ordered.includes(r.id)}
-                        onMark={() => markOrdered([r.id])}
-                        onUnmark={() => unmark(r.id)}
-                      />
-                    ))}
-                  </tbody>
-                ))}
-              </table>
-            </div>
-          )}
-        </section>
-      </div>
-    </AppShell>
-  );
-}
+  <p className="px-6 py-10 text-center text-[12.5px] text-muted-foreground">
+    Loading...
+  </p>
+) : finalProducts.length === 0 ? (
+  <p className="px-6 py-10 text-center text-[12.5px] text-muted-foreground">
+    Search and select products to create a demand list.
+  </p>
+) : (
+  <div className="overflow-x-auto">
+    <table className="w-full text-sm">
+      <thead>
+        <tr className="border-b">
+          <th className="text-left p-3">Product</th>
+          <th className="text-center">Stock</th>
+          <th className="text-center">Qty</th>
+          <th className="text-center">Unit</th>
+          <th className="text-center">Action</th>
+        </tr>
+      </thead>
 
+      <tbody>
+        {finalProducts.map((item) => (
+          <tr key={item.id} className="border-b">
+
+            <td className="p-3">
+              <div className="font-medium">{item.name}</div>
+              <div className="text-xs text-muted-foreground">
+                {item.code}
+              </div>
+            </td>
+
+            <td className="text-center">
+              {item.current_stock}
+            </td>
+
+            <td className="text-center">
+              <Input
+                type="number"
+                min={1}
+                value={item.required}
+                className="w-20 mx-auto text-center"
+                onChange={(e) => {
+                  const qty = Number(e.target.value);
+
+                  setSelectedProducts((prev) =>
+                    prev.map((p) =>
+                      p.id === item.id
+                        ? {
+                            ...p,
+                            required: qty,
+                          }
+                        : p
+                    )
+                  );
+                }}
+              />
+            </td>
+
+            <td className="text-center">
+              {item.unit}
+            </td>
+
+            <td className="text-center">
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() =>
+                  setSelectedProducts((prev) =>
+                    prev.filter((p) => p.id !== item.id)
+                  )
+                }
+              >
+                Remove
+              </Button>
+            </td>
+
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+)}
 function DemandRowView({
   row,
   striped,
