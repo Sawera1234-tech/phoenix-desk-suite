@@ -22,13 +22,14 @@ import {
   readSettings,
   restoreBackup,
   runAutoBackup,
+  uploadToDrive,
   writeSettings,
   type BackupCadence,
   type BackupFile,
   type BackupSettings,
   type BackupSlot,
 } from "@/lib/backup";
-import { DatabaseBackup, Download, RotateCcw, Upload, Loader2 } from "lucide-react";
+import { DatabaseBackup, Download, RotateCcw, Upload, Loader2, CloudUpload } from "lucide-react";
 
 const CADENCES: { key: BackupCadence; label: string }[] = [
   { key: "daily", label: "Daily" },
