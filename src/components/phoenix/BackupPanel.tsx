@@ -185,12 +185,44 @@ export function BackupPanel() {
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => fileRef.current?.click()}>
             <Upload className="h-3.5 w-3.5" /> Restore backup
           </Button>
+          <Button variant="outline" size="sm" className="gap-1.5" disabled={busy === "drive"} onClick={handleDriveUpload}>
+            {busy === "drive" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CloudUpload className="h-3.5 w-3.5" />} Upload to Drive
+          </Button>
           <Button variant={settings.auto ? "secondary" : "outline"} size="sm" onClick={() => toggleAuto(!settings.auto)}>
             {settings.auto ? "Auto backup: On" : "Auto backup: Off"}
+          </Button>
+          <Button variant={settings.drive_auto ? "secondary" : "outline"} size="sm" onClick={() => toggleDrive(!settings.drive_auto)}>
+            {settings.drive_auto ? "Drive upload: On" : "Drive upload: Off"}
           </Button>
           <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={handleFile} aria-label="Backup file" />
         </div>
       </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+        <div className="rounded-xl border border-border bg-muted/25 p-4 sm:col-span-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Google Drive backup</div>
+            <span
+              className={`text-[11.5px] font-semibold ${
+                settings.drive_last_status === "error"
+                  ? "text-destructive"
+                  : settings.drive_last_status === "ok"
+                    ? "text-success"
+                    : "text-muted-foreground"
+              }`}
+            >
+              {settings.drive_last_status === "error" ? "Failed" : settings.drive_last_status === "ok" ? "Synced" : "Waiting"}
+            </span>
+          </div>
+          <div className="mt-1 text-[13px] font-semibold text-foreground">
+            {settings.drive_last_run ? fmtDateTime(settings.drive_last_run) : "No upload yet"}
+          </div>
+          <p className="mt-0.5 truncate text-[11.5px] text-muted-foreground">
+            {settings.drive_last_message ?? "Snapshots upload to Project Phoenix Backups / Daily · Weekly · Monthly."}
+          </p>
+        </div>
+      </div>
+
 
       <div className="mt-5 grid gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-border bg-muted/25 p-4">
