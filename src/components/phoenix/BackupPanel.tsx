@@ -22,13 +22,14 @@ import {
   readSettings,
   restoreBackup,
   runAutoBackup,
+  uploadToDrive,
   writeSettings,
   type BackupCadence,
   type BackupFile,
   type BackupSettings,
   type BackupSlot,
 } from "@/lib/backup";
-import { DatabaseBackup, Download, RotateCcw, Upload, Loader2 } from "lucide-react";
+import { DatabaseBackup, Download, RotateCcw, Upload, Loader2, CloudUpload } from "lucide-react";
 
 const CADENCES: { key: BackupCadence; label: string }[] = [
   { key: "daily", label: "Daily" },
@@ -39,7 +40,7 @@ const CADENCES: { key: BackupCadence; label: string }[] = [
 export function BackupPanel() {
   const qc = useQueryClient();
   const [slots, setSlots] = useState<BackupSlot[]>([]);
-  const [settings, setSettings] = useState<BackupSettings>({ auto: true, last_run: null, last_status: "idle", last_message: null });
+  const [settings, setSettings] = useState<BackupSettings>(() => readSettings());
   const [busy, setBusy] = useState<string | null>(null);
   const [pending, setPending] = useState<BackupFile | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -68,6 +69,29 @@ export function BackupPanel() {
   function toggleAuto(next: boolean) {
     setSettings(writeSettings({ auto: next }));
     toast.success(next ? "Automatic backup enabled" : "Automatic backup paused");
+  }
+
+  function toggleDrive(next: boolean) {
+    setSettings(writeSettings({ drive_auto: next }));
+    toast.success(next ? "Google Drive upload enabled" : "Google Drive upload paused");
+  }
+
+  async function handleDriveUpload() {
+    setBusy("drive");
+    try {
+      for (const c of CADENCES) {
+        const slot = slots.find((s) => s.cadence === c.key);
+        const file = slot?.payload ? (JSON.parse(slot.payload) as BackupFile) : await createBackup(c.key);
+        await uploadToDrive(file, c.key);
+      }
+      refreshSlots();
+      toast.success("Backups uploaded to Google Drive");
+    } catch (e) {
+      refreshSlots();
+      toast.error((e as Error).message || "Google Drive upload failed");
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function handleBackupAll() {
@@ -147,7 +171,7 @@ export function BackupPanel() {
           <div>
             <h2 className="text-[14px] font-semibold text-foreground">Backup &amp; Restore</h2>
             <p className="text-[12px] text-muted-foreground">
-              Automatic daily, weekly and monthly snapshots are kept on this device. Download a copy or restore any file.
+              Automatic daily, weekly and monthly snapshots are kept on this device and uploaded to your Google Drive.
             </p>
           </div>
         </div>
@@ -161,12 +185,44 @@ export function BackupPanel() {
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => fileRef.current?.click()}>
             <Upload className="h-3.5 w-3.5" /> Restore backup
           </Button>
+          <Button variant="outline" size="sm" className="gap-1.5" disabled={busy === "drive"} onClick={handleDriveUpload}>
+            {busy === "drive" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CloudUpload className="h-3.5 w-3.5" />} Upload to Drive
+          </Button>
           <Button variant={settings.auto ? "secondary" : "outline"} size="sm" onClick={() => toggleAuto(!settings.auto)}>
             {settings.auto ? "Auto backup: On" : "Auto backup: Off"}
+          </Button>
+          <Button variant={settings.drive_auto ? "secondary" : "outline"} size="sm" onClick={() => toggleDrive(!settings.drive_auto)}>
+            {settings.drive_auto ? "Drive upload: On" : "Drive upload: Off"}
           </Button>
           <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={handleFile} aria-label="Backup file" />
         </div>
       </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+        <div className="rounded-xl border border-border bg-muted/25 p-4 sm:col-span-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Google Drive backup</div>
+            <span
+              className={`text-[11.5px] font-semibold ${
+                settings.drive_last_status === "error"
+                  ? "text-destructive"
+                  : settings.drive_last_status === "ok"
+                    ? "text-success"
+                    : "text-muted-foreground"
+              }`}
+            >
+              {settings.drive_last_status === "error" ? "Failed" : settings.drive_last_status === "ok" ? "Synced" : "Waiting"}
+            </span>
+          </div>
+          <div className="mt-1 text-[13px] font-semibold text-foreground">
+            {settings.drive_last_run ? fmtDateTime(settings.drive_last_run) : "No upload yet"}
+          </div>
+          <p className="mt-0.5 truncate text-[11.5px] text-muted-foreground">
+            {settings.drive_last_message ?? "Snapshots upload to Project Phoenix Backups / Daily · Weekly · Monthly."}
+          </p>
+        </div>
+      </div>
+
 
       <div className="mt-5 grid gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-border bg-muted/25 p-4">
