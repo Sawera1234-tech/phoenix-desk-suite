@@ -43,6 +43,7 @@ function DemandListPage() {
   const [category, setCategory] = useState("all");
   const [sortMode, setSortMode] = useState<DemandSort>("category");
   const [ordered, setOrdered] = useState<string[]>([]);
+  const [manualItems, setManualItems] = useState<DemandRow[]>([]);
 
   useEffect(() => setOrdered(readOrdered()), []);
 
@@ -69,7 +70,7 @@ function DemandListPage() {
 
   const visible = useMemo(() => {
     const q = term.trim().toLowerCase();
-    const filtered = rows.filter((r) => {
+    const filtered = allrows.filter((r) => {
       if (category !== "all" && r.category_id !== category) return false;
       if (!q) return true;
       return r.name.toLowerCase().includes(q) || r.code.toLowerCase().includes(q) || r.category.toLowerCase().includes(q);
@@ -134,6 +135,35 @@ function DemandListPage() {
               <Button size="sm" className="gap-1.5" onClick={() => print("80mm")}>
                 <Printer className="h-3.5 w-3.5" /> Print (80mm)
               </Button>
+              <Button
+  size="sm"
+  onClick={async () => {
+    const name = prompt("Product Name");
+    if (!name) return;
+
+    const qty = Number(prompt("Required Quantity") || "1");
+
+    setManualItems((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        name,
+        code: "MANUAL",
+        unit: "pcs",
+        category_id: null,
+        category: "Manual",
+        current_stock: 0,
+        min_stock: 0,
+        max_stock: qty,
+        required: qty,
+      },
+    ]);
+
+    toast.success("Manual product added");
+  }}
+>
+  + Manual Product
+</Button>
             </div>
           </header>
 
