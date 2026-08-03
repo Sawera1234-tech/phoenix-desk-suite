@@ -44,6 +44,8 @@ function DemandListPage() {
   const [sortMode, setSortMode] = useState<DemandSort>("category");
   const [ordered, setOrdered] = useState<string[]>([]);
   const [manualItems, setManualItems] = useState<DemandRow[]>([]);
+  const [productSearch, setProductSearch] = useState("");
+  const [selectedProducts, setSelectedProducts] = useState<DemandRow[]>([]);
 
   useEffect(() => setOrdered(readOrdered()), []);
 
@@ -52,6 +54,38 @@ function DemandListPage() {
     queryFn: fetchDemandRows,
     refetchOnWindowFocus: true,
   });
+  const suggestions = useMemo(() => {
+  if (!productSearch.trim()) return [];
+
+  const q = productSearch.toLowerCase();
+
+  return rows
+    .filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.code.toLowerCase().includes(q)
+    )
+    .filter(
+      (p) => !selectedProducts.some((x) => x.id === p.id)
+    )
+    .slice(0, 8);
+  }, [productSearch, rows, selectedProducts]);
+  const suggestions = useMemo(() => {
+  if (!productSearch.trim()) return [];
+
+  const q = productSearch.toLowerCase();
+
+  return rows
+    .filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.code.toLowerCase().includes(q)
+    )
+    .filter(
+      (p) => !selectedProducts.some((x) => x.id === p.id)
+    )
+    .slice(0, 8);
+  }, [productSearch, rows, selectedProducts]);
 
   // Categories stay in sync with the Categories module automatically.
   const { data: categories = [] } = useQuery({
@@ -176,17 +210,51 @@ function DemandListPage() {
             </div>
           </header>
 
-          <div className="flex flex-wrap items-center gap-2 border-b border-border px-6 py-3">
-            <div className="relative min-w-[240px] flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={term}
-                onChange={(e) => setTerm(e.target.value)}
-                placeholder="Search product, code or category…"
-                className="h-9 pl-9"
-                aria-label="Search demand list"
-              />
+          <div className="relative min-w-[350px] flex-1">
+
+  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+
+  <Input
+    value={productSearch}
+    onChange={(e) => setProductSearch(e.target.value)}
+    placeholder="Search Product..."
+    className="h-9 pl-9"
+  />
+
+  {suggestions.length > 0 && (
+    <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-md border bg-background shadow-lg">
+
+      {suggestions.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          className="flex w-full items-center justify-between px-3 py-2 hover:bg-muted text-left"
+          onClick={() => {
+            setSelectedProducts((prev) => [...prev, item]);
+            setProductSearch("");
+          }}
+        >
+          <div>
+            <div className="font-medium">{item.name}</div>
+            <div className="text-xs text-muted-foreground">
+              {item.code}
             </div>
+          </div>
+
+          <div className="text-right text-xs">
+            <div>Stock</div>
+            <div className="font-semibold">
+              {item.current_stock} {item.unit}
+            </div>
+          </div>
+
+        </button>
+      ))}
+
+    </div>
+  )}
+
+</div>
             <Select value={category} onValueChange={setCategory}>
               <SelectTrigger className="h-9 w-[220px] text-[12.5px]" aria-label="Filter by category">
                 <SelectValue placeholder="All categories" />
