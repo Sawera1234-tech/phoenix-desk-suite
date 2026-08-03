@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { uploadBackupToDriveFn } from "@/lib/drive-backup.functions";
 
 /**
  * Local + downloadable backup engine.
