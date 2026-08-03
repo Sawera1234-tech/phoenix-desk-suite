@@ -8,6 +8,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -37,6 +44,7 @@ type Product = {
   id: string;
   code: string;
   name: string;
+  category_id: string;
   description: string | null;
   cost_price: number;
   retail_price: number;
@@ -51,6 +59,7 @@ type Product = {
 type FormState = {
   code: string;
   name: string;
+  category_id: string;
   description: string;
   cost_price: string;
   retail_price: string;
@@ -64,6 +73,7 @@ type FormState = {
 const emptyForm: FormState = {
   code: "",
   name: "",
+  category_id: "",
   description: "",
   cost_price: "",
   retail_price: "",
@@ -78,6 +88,7 @@ function toForm(p: Product): FormState {
   return {
     code: p.code,
     name: p.name,
+    category_id: p.category_id ?? "",
     description: p.description ?? "",
     cost_price: String(p.cost_price ?? 0),
     retail_price: String(p.retail_price ?? 0),
@@ -272,6 +283,18 @@ function ProductDialog({
   const open = isControlled ? controlledOpen : internalOpen;
   const setOpen = (o: boolean) => (isControlled ? onOpenChange?.(o) : setInternalOpen(o));
   const [form, setForm] = useState<FormState>(emptyForm);
+  const { data: categories = [] } = useQuery({
+  queryKey: ["categories"],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from("categories")
+      .select("id,name")
+      .order("name");
+
+    if (error) throw error;
+    return data;
+  },
+});
 
   useEffect(() => {
     if (open) setForm(product ? toForm(product) : emptyForm);
@@ -282,6 +305,7 @@ function ProductDialog({
       const payload = {
         code: form.code.trim(),
         name: form.name.trim(),
+        category_id: form.category_id || null,
         description: form.description || null,
         cost_price: Number(form.cost_price) || 0,
         retail_price: Number(form.retail_price) || 0,
@@ -326,6 +350,7 @@ function ProductDialog({
           <div className="space-y-1.5"><Label>Min Stock</Label><Input type="number" value={form.min_stock} onChange={(e) => setForm({ ...form, min_stock: e.target.value })} /></div>
           <div className="space-y-1.5"><Label>Max Stock</Label><Input type="number" value={form.max_stock} onChange={(e) => setForm({ ...form, max_stock: e.target.value })} placeholder="Target level for demand list" /></div>
           <div className="space-y-1.5"><Label>Unit</Label><Input value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} placeholder="pcs" /></div>
+          <div className="space-y-1.5"><Label>Category</Label><Select value={form.category_id} onValueChange={(value) => setForm({ ...form, category_id: value })}><SelectTrigger><SelectValue placeholder="Select Category" /></SelectTrigger><SelectContent>{categories.map((c: any) => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}</SelectContent></Select></div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
