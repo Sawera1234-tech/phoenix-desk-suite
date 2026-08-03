@@ -149,6 +149,42 @@ export function isSlotDue(cadence: BackupCadence): boolean {
   return periodStamp(cadence, new Date(slot.created_at)) !== periodStamp(cadence);
 }
 
+export function backupFileName(file: BackupFile, label: string = file.cadence) {
+  return `phoenix-backup-${label}-${file.created_at.replace(/[:.]/g, "-")}.json`;
+}
+
+/**
+ * Uploads a snapshot into the Daily / Weekly / Monthly folder of the connected
+ * Google Drive account. Folders are created on first use.
+ */
+export async function uploadToDrive(file: BackupFile, cadence: BackupCadence | "manual" = file.cadence) {
+  try {
+    const result = await uploadBackupToDriveFn({
+      data: { cadence, fileName: backupFileName(file, cadence), content: JSON.stringify(file) },
+    });
+    writeSettings({
+      drive_last_run: result.uploaded_at,
+      drive_last_status: "ok",
+      drive_last_message: `${result.file_name} → ${result.folder}`,
+    });
+    return result;
+  } catch (e) {
+    writeSettings({ drive_last_status: "error", drive_last_message: (e as Error).message });
+    throw e;
+  }
+}
+
+async function maybeUploadToDrive(file: BackupFile, cadences: (BackupCadence | "manual")[]) {
+  if (!readSettings().drive_auto) return;
+  for (const cadence of cadences) {
+    try {
+      await uploadToDrive({ ...file, cadence }, cadence);
+    } catch {
+      // Status is recorded in settings; local backup stays valid.
+    }
+  }
+}
+
 /**
  * Runs any due daily/weekly/monthly snapshot in the background. Safe to call on
  * every page load — it exits immediately when nothing is due.
@@ -161,6 +197,7 @@ export async function runAutoBackup(): Promise<BackupCadence[]> {
     const file = await createBackup(due[0]);
     for (const cadence of due) writeSlot(cadence, { ...file, cadence });
     writeSettings({ last_run: file.created_at, last_status: "ok", last_message: `${due.join(", ")} backup saved` });
+    await maybeUploadToDrive(file, due);
     return due;
   } catch (e) {
     writeSettings({ last_status: "error", last_message: (e as Error).message });
@@ -173,6 +210,7 @@ export async function backupNow(cadence: BackupCadence): Promise<BackupSlot> {
     const file = await createBackup(cadence);
     writeSlot(cadence, file);
     writeSettings({ last_run: file.created_at, last_status: "ok", last_message: `${cadence} backup saved` });
+    await maybeUploadToDrive(file, [cadence]);
     return readSlot(cadence)!;
   } catch (e) {
     writeSettings({ last_status: "error", last_message: (e as Error).message });
