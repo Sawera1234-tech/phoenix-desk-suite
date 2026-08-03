@@ -51,9 +51,23 @@ export interface BackupSettings {
   last_run: string | null;
   last_status: "idle" | "ok" | "error";
   last_message: string | null;
+  /** Automatic upload of every snapshot to the connected Google Drive. */
+  drive_auto: boolean;
+  drive_last_run: string | null;
+  drive_last_status: "idle" | "ok" | "error";
+  drive_last_message: string | null;
 }
 
-const DEFAULT_SETTINGS: BackupSettings = { auto: true, last_run: null, last_status: "idle", last_message: null };
+const DEFAULT_SETTINGS: BackupSettings = {
+  auto: true,
+  last_run: null,
+  last_status: "idle",
+  last_message: null,
+  drive_auto: true,
+  drive_last_run: null,
+  drive_last_status: "idle",
+  drive_last_message: null,
+};
 
 export function readSettings(): BackupSettings {
   if (typeof window === "undefined") return DEFAULT_SETTINGS;
