@@ -69,14 +69,23 @@ function DemandListPage() {
   });
 
   const visible = useMemo(() => {
-    const q = term.trim().toLowerCase();
-    const filtered = allrows.filter((r) => {
-      if (category !== "all" && r.category_id !== category) return false;
-      if (!q) return true;
-      return r.name.toLowerCase().includes(q) || r.code.toLowerCase().includes(q) || r.category.toLowerCase().includes(q);
-    });
-    return sortDemand(filtered, sortMode);
-  }, [rows, term, category, sortMode]);
+  const allRows = [...rows, ...manualItems];
+
+  const q = term.trim().toLowerCase();
+
+  const filtered = allRows.filter((r) => {
+    if (category !== "all" && r.category_id !== category) return false;
+    if (!q) return true;
+
+    return (
+      r.name.toLowerCase().includes(q) ||
+      r.code.toLowerCase().includes(q) ||
+      r.category.toLowerCase().includes(q)
+    );
+  });
+
+  return sortDemand(filtered, sortMode);
+}, [rows, manualItems, term, category, sortMode]);
 
   const pending = visible.filter((r) => !ordered.includes(r.id));
   const groups = groupByCategory(sortMode === "category" ? visible : visible);
