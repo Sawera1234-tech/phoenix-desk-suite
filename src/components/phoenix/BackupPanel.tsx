@@ -71,6 +71,29 @@ export function BackupPanel() {
     toast.success(next ? "Automatic backup enabled" : "Automatic backup paused");
   }
 
+  function toggleDrive(next: boolean) {
+    setSettings(writeSettings({ drive_auto: next }));
+    toast.success(next ? "Google Drive upload enabled" : "Google Drive upload paused");
+  }
+
+  async function handleDriveUpload() {
+    setBusy("drive");
+    try {
+      for (const c of CADENCES) {
+        const slot = slots.find((s) => s.cadence === c.key);
+        const file = slot?.payload ? (JSON.parse(slot.payload) as BackupFile) : await createBackup(c.key);
+        await uploadToDrive(file, c.key);
+      }
+      refreshSlots();
+      toast.success("Backups uploaded to Google Drive");
+    } catch (e) {
+      refreshSlots();
+      toast.error((e as Error).message || "Google Drive upload failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function handleBackupAll() {
     setBusy("all");
     try {
