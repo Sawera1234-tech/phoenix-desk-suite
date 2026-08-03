@@ -39,7 +39,7 @@ const CADENCES: { key: BackupCadence; label: string }[] = [
 export function BackupPanel() {
   const qc = useQueryClient();
   const [slots, setSlots] = useState<BackupSlot[]>([]);
-  const [settings, setSettings] = useState<BackupSettings>({ auto: true, last_run: null, last_status: "idle", last_message: null });
+  const [settings, setSettings] = useState<BackupSettings>(() => readSettings());
   const [busy, setBusy] = useState<string | null>(null);
   const [pending, setPending] = useState<BackupFile | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
