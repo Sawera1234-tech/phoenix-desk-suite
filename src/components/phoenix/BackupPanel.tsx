@@ -171,7 +171,7 @@ export function BackupPanel() {
           <div>
             <h2 className="text-[14px] font-semibold text-foreground">Backup &amp; Restore</h2>
             <p className="text-[12px] text-muted-foreground">
-              Automatic daily, weekly and monthly snapshots are kept on this device. Download a copy or restore any file.
+              Automatic daily, weekly and monthly snapshots are kept on this device and uploaded to your Google Drive.
             </p>
           </div>
         </div>
