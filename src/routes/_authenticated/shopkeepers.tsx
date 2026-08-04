@@ -5,6 +5,7 @@ import { AppShell } from "@/components/phoenix/AppShell";
 import { DataTable } from "@/components/phoenix/DataTable";
 import { fmtRs, fmtDate } from "@/lib/format";
 import { supabase } from "@/integrations/supabase/client";
+import { deleteRecord, logAudit } from "@/lib/audit";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -62,12 +63,7 @@ function ShopkeepersPage() {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { data, error } = await supabase.from("shopkeepers").delete().eq("id", id).select("id");
-      if (error) throw new Error(error.message);
-      if (!data || data.length === 0)
-        throw new Error(
-          "Delete failed — no row was removed. You may not have permission, or linked invoices/ledger entries are blocking it.",
-        );
+      await deleteRecord({ table: "shopkeepers", id, label: "Shopkeeper" });
     },
     onSuccess: () => {
       toast.success("Shopkeeper deleted");
@@ -210,6 +206,14 @@ function EditShopkeeperDialog({
       if (error) throw new Error(error.message);
       if (!data || data.length === 0)
         throw new Error("Update failed — no row was changed. You may not have permission to edit shopkeepers.");
+      await logAudit({
+        table: "shopkeepers",
+        recordId: shopkeeper.id,
+        label: form.name.trim(),
+        action: "update",
+        before: shopkeeper,
+        after: { ...form, opening_balance: opening },
+      });
     },
     onSuccess: () => {
       toast.success("Shopkeeper updated");
@@ -273,15 +277,17 @@ function NewShopkeeperDialog({ onCreated }: { onCreated: () => void }) {
   const [form, setForm] = useState({ name: "", shop_name: "", phone: "", address: "", opening_balance: "0" });
   const create = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("shopkeepers").insert({
+      const payload = {
         name: form.name.trim(),
         shop_name: form.shop_name || null,
         phone: form.phone || null,
         address: form.address || null,
         opening_balance: Number(form.opening_balance) || 0,
         current_balance: Number(form.opening_balance) || 0,
-      });
+      };
+      const { data, error } = await supabase.from("shopkeepers").insert(payload).select("id").single();
       if (error) throw error;
+      await logAudit({ table: "shopkeepers", recordId: data.id, label: payload.name, action: "create", after: payload });
     },
     onSuccess: () => {
       toast.success("Shopkeeper added");

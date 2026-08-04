@@ -5,6 +5,7 @@ import { AppShell } from "@/components/phoenix/AppShell";
 import { DataTable } from "@/components/phoenix/DataTable";
 import { fmtRs } from "@/lib/format";
 import { supabase } from "@/integrations/supabase/client";
+import { deleteRecord, logAudit } from "@/lib/audit";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import {
@@ -123,8 +124,8 @@ function ProductsPage() {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("products").delete().eq("id", id);
-      if (error) throw error;
+      const row = data.find((p) => p.id === id);
+      await deleteRecord({ table: "products", id, label: row?.name ?? "Product", before: row as unknown as Record<string, unknown> });
     },
     onSuccess: () => {
       toast.success("Product deleted");
@@ -316,10 +317,16 @@ function ProductDialog({
         unit: form.unit.trim() || "pcs",
       };
       if (!payload.code || !payload.name) throw new Error("Code and name are required");
-      const { error } = product
-        ? await supabase.from("products").update(payload).eq("id", product.id)
-        : await supabase.from("products").insert(payload);
-      if (error) throw error;
+      if (product) {
+        const { data, error } = await supabase.from("products").update(payload).eq("id", product.id).select("id");
+        if (error) throw new Error(error.message);
+        if (!data?.length) throw new Error("Nothing was updated — check your permissions.");
+        await logAudit({ table: "products", recordId: product.id, label: payload.name, action: "update", before: product, after: payload });
+      } else {
+        const { data, error } = await supabase.from("products").insert(payload).select("id").single();
+        if (error) throw new Error(error.message);
+        await logAudit({ table: "products", recordId: data.id, label: payload.name, action: "create", after: payload });
+      }
     },
     onSuccess: () => {
       toast.success(product ? "Product updated" : "Product created");

@@ -194,8 +194,9 @@ function DemandListPage() {
 </Button>
             </div>
           </header>
-
+          <div className="flex flex-wrap items-center gap-2 border-b border-border px-6 py-3">
           <div className="relative min-w-[350px] flex-1">
+
 
   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 
@@ -358,6 +359,13 @@ function DemandListPage() {
     </table>
   </div>
 )}
+        </section>
+      </div>
+    </AppShell>
+  );
+}
+
+
 function DemandRowView({
   row,
   striped,
