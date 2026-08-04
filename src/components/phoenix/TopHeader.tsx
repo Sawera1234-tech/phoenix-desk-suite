@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Search, Bell, Calendar as CalendarIcon, Command as CommandIcon, PackageX, AlertTriangle } from "lucide-react";
 import type { ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useBusinessProfile } from "@/components/wholesale/ThermalReceipt";
 import {
   CommandDialog,
   CommandEmpty,
@@ -95,7 +96,7 @@ export function TopHeader({
         <div className="flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
           <span>Raza Mobile Parts</span>
           <span className="text-border">/</span>
-          <span>{subtitle ?? "Karachi Warehouse"}</span>
+          <span>{subtitle ?? shopName}</span>
         </div>
         <div className="mt-0.5 flex items-center gap-2">
           <h1 className="truncate text-[15px] font-semibold text-foreground">{title}</h1>

@@ -18,6 +18,7 @@ import {
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { useBusinessProfile } from "@/components/wholesale/ThermalReceipt";
 import { useEffect, useState } from "react";
 
 type Item = { title: string; icon: typeof LayoutDashboard; to: string; shortcut?: string };
@@ -88,6 +89,9 @@ export function AppSidebar() {
     .map((s) => s[0]?.toUpperCase())
     .join("") || "U";
 
+  const { data: business } = useBusinessProfile();
+  const shopName = business?.shop_name?.trim() || "Project Phoenix";
+
   async function signOut() {
     await supabase.auth.signOut();
     navigate({ to: "/login", search: { next: "/" } });
@@ -102,7 +106,7 @@ export function AppSidebar() {
           <Flame className="h-[18px] w-[18px]" />
         </div>
         <div className="flex min-w-0 flex-col">
-          <span className="truncate text-[14px] font-semibold text-white">Project Phoenix</span>
+          <span className="truncate text-[14px] font-semibold text-white">{shopName}</span>
           <span className="truncate text-[11px] font-medium text-sidebar-foreground/55">
             Wholesale ERP · v3.0
           </span>
