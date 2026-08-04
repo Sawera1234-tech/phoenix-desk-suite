@@ -90,7 +90,7 @@ export function AppSidebar() {
 
   async function signOut() {
     await supabase.auth.signOut();
-    navigate({ to: "/login" });
+    navigate({ to: "/login", search: { next: "/" } });
   }
 
   const isActive = (to: string) => (to === "/" ? pathname === "/" : pathname.startsWith(to));
