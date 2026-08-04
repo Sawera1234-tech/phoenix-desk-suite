@@ -5,6 +5,7 @@ import { AppShell } from "@/components/phoenix/AppShell";
 import { DataTable } from "@/components/phoenix/DataTable";
 import { fmtRs, fmtDate } from "@/lib/format";
 import { supabase } from "@/integrations/supabase/client";
+import { deleteRecord, logAudit } from "@/lib/audit";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -62,12 +63,7 @@ function ShopkeepersPage() {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { data, error } = await supabase.from("shopkeepers").delete().eq("id", id).select("id");
-      if (error) throw new Error(error.message);
-      if (!data || data.length === 0)
-        throw new Error(
-          "Delete failed — no row was removed. You may not have permission, or linked invoices/ledger entries are blocking it.",
-        );
+      await deleteRecord({ table: "shopkeepers", id, label: "Shopkeeper" });
     },
     onSuccess: () => {
       toast.success("Shopkeeper deleted");
