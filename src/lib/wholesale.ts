@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { logAudit } from "@/lib/audit";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 // NOTE: the database columns are `invoice_no`, `amount_paid` (invoices),
@@ -380,6 +381,14 @@ export async function createInvoice(form: InvoiceFormData): Promise<Invoice> {
     if (ledgerError) throw ledgerError;
   }
 
+  await logAudit({
+    table: "invoices",
+    recordId: mapped.id,
+    label: `Invoice ${invoiceNumber}`,
+    action: "create",
+    after: { ...form, total, status },
+  });
+
   return mapped;
 }
 
@@ -471,6 +480,15 @@ export async function updateInvoice(id: string, form: InvoiceFormData): Promise<
     if (ledgerError) throw ledgerError;
   }
 
+  await logAudit({
+    table: "invoices",
+    recordId: id,
+    label: `Invoice ${mapped.invoice_number}`,
+    action: "update",
+    before: existing as unknown as Record<string, unknown>,
+    after: { ...form, total, status },
+  });
+
   return mapped;
 }
 
@@ -515,6 +533,14 @@ export async function deleteInvoice(id: string): Promise<void> {
 
   const { error: invoiceError } = await supabase.from("invoices").delete().eq("id", id);
   if (invoiceError) throw invoiceError;
+
+  await logAudit({
+    table: "invoices",
+    recordId: id,
+    label: "Invoice",
+    action: "delete",
+    before: existing as unknown as Record<string, unknown>,
+  });
 }
 
 
