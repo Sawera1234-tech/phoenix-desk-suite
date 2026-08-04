@@ -5,6 +5,7 @@ import { AppShell } from "@/components/phoenix/AppShell";
 import { fmtDate } from "@/lib/format";
 import { fmtRs } from "@/lib/wholesale";
 import { supabase } from "@/integrations/supabase/client";
+import { logAudit } from "@/lib/audit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -190,8 +191,15 @@ function UsageComposer({ onSaved }: { onSaved: () => void }) {
           notes: i.notes || null,
           created_by: userData.user?.id ?? null,
         }));
-      const { error } = await supabase.from("daily_usage").insert(payload);
+      const { data: inserted, error } = await supabase.from("daily_usage").insert(payload).select("id");
       if (error) throw error;
+      await logAudit({
+        table: "daily_usage",
+        recordId: inserted?.[0]?.id ?? date,
+        label: `Daily usage ${date}`,
+        action: "create",
+        after: { rows: payload.length, units: payload.reduce((s, r) => s + r.quantity, 0) },
+      });
     },
     onSuccess: () => {
       toast.success("Today's usage saved — stock updated");
