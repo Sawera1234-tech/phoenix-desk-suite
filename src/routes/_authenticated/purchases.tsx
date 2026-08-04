@@ -70,12 +70,6 @@ function PurchasesPage() {
     qc.invalidateQueries({ queryKey: ["demand"] });
   };
 
-  const remove = useMutation({
-    mutationFn: (id: string) => deletePurchase(id),
-    onSuccess: () => { toast.success("Purchase deleted — stock reverted"); refresh(); },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
   return (
     <AppShell title="Purchases" subtitle="Supplier Orders">
       <div className="mx-auto max-w-[1600px] space-y-4 p-6 xl:p-8">
@@ -116,7 +110,7 @@ function PurchasesPage() {
                 <PurchaseActions
                   row={r}
                   onEdit={() => { setEditing(r); setOpen(true); }}
-                  onDelete={() => remove.mutate(r.id)}
+                  onDeleted={refresh}
                 />
               ),
             },
@@ -131,11 +125,11 @@ function PurchasesPage() {
 function PurchaseActions({
   row,
   onEdit,
-  onDelete,
+  onDeleted,
 }: {
   row: PurchaseRow & { supplier_name: string };
   onEdit: () => void;
-  onDelete: () => void;
+  onDeleted: () => void;
 }) {
   const { data: items = [] } = useQuery({
     queryKey: purchaseKeys.items(row.id),
@@ -148,7 +142,8 @@ function PurchaseActions({
       id={row.id}
       label={row.purchase_no}
       onEdit={onEdit}
-      onDeleted={onDelete}
+      deleteFn={() => deletePurchase(row.id)}
+      onDeleted={onDeleted}
       fields={[
         { label: "Supplier", value: row.supplier_name },
         { label: "Date", value: fmtDate(row.purchase_date) },
