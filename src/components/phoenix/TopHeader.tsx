@@ -38,6 +38,9 @@ export function TopHeader({
 }) {
   const navigate = useNavigate();
   const [searchOpen, setSearchOpen] = useState(false);
+  const { data: business } = useBusinessProfile();
+  const shopName = business?.shop_name?.trim() || "Project Phoenix";
+
 
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "short",
