@@ -359,6 +359,13 @@ function DemandListPage() {
     </table>
   </div>
 )}
+        </section>
+      </div>
+    </AppShell>
+  );
+}
+
+
 function DemandRowView({
   row,
   striped,
