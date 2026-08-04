@@ -44,6 +44,7 @@ export function RowActions({
   fields,
   onEdit,
   onDeleted,
+  deleteFn,
   extra,
   canDelete = true,
 }: {
@@ -53,6 +54,8 @@ export function RowActions({
   fields: ViewField[];
   onEdit?: () => void;
   onDeleted?: () => void;
+  /** Module-specific delete that also unwinds stock, balances or ledger rows. */
+  deleteFn?: () => Promise<void>;
   extra?: ReactNode;
   canDelete?: boolean;
 }) {
@@ -64,6 +67,7 @@ export function RowActions({
   async function openConfirm() {
     setBlock(null);
     setConfirm(true);
+    if (deleteFn) return;
     const check = await checkDeletable(table, id);
     if (check.blocked) setBlock(check.reason ?? "This record is linked to other data.");
   }
@@ -71,7 +75,8 @@ export function RowActions({
   async function runDelete() {
     setBusy(true);
     try {
-      await deleteRecord({ table, id, label });
+      if (deleteFn) await deleteFn();
+      else await deleteRecord({ table, id, label });
       toast.success(`${label} deleted`);
       setConfirm(false);
       onDeleted?.();
@@ -81,6 +86,7 @@ export function RowActions({
       setBusy(false);
     }
   }
+
 
   async function runDeactivate() {
     setBusy(true);
