@@ -1,6 +1,7 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { AppSidebar } from "./AppSidebar";
 import { TopHeader } from "./TopHeader";
+import { useBusinessProfile } from "@/components/wholesale/ThermalReceipt";
 
 export function AppShell({
   title,
@@ -13,6 +14,15 @@ export function AppShell({
   actions?: ReactNode;
   children: ReactNode;
 }) {
+  const { data: business } = useBusinessProfile();
+  const shopName = business?.shop_name?.trim();
+
+  // Browser/window title always follows the business name from Settings.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.title = `${title} · ${shopName || "Project Phoenix"}`;
+  }, [title, shopName]);
+
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
       <AppSidebar />
