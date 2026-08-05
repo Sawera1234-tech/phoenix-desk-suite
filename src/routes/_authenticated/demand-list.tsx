@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/phoenix/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -412,8 +412,8 @@ function DemandListPage() {
                 </thead>
                 <tbody>
                   {groups.map((g) => (
-                    <>
-                      <tr key={`h-${g.category}`}>
+                    <Fragment key={g.category}>
+                      <tr>
                         <td
                           colSpan={7}
                           className="bg-muted/60 px-6 py-1.5 text-[11.5px] font-semibold uppercase tracking-wide text-foreground"
@@ -431,7 +431,7 @@ function DemandListPage() {
                           onUnmark={() => unmark(row.id)}
                         />
                       ))}
-                    </>
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
