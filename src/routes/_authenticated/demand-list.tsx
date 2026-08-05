@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/phoenix/AppShell";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { CheckCircle2, FileDown, Printer, RefreshCw, Search, ClipboardCheck } from "lucide-react";
+import { CheckCircle2, FileDown, Minus, Plus, Printer, RefreshCw, Search, ClipboardCheck, X } from "lucide-react";
 import {
   demandKeys,
   fetchDemandRows,
@@ -37,39 +37,71 @@ export const Route = createFileRoute("/_authenticated/demand-list")({
   component: DemandListPage,
 });
 
+type ManualRow = DemandRow & { manual: true };
+
 function DemandListPage() {
-  const qc = useQueryClient();
   const [term, setTerm] = useState("");
   const [category, setCategory] = useState("all");
   const [sortMode, setSortMode] = useState<DemandSort>("category");
   const [ordered, setOrdered] = useState<string[]>([]);
-  const [manualItems, setManualItems] = useState<DemandRow[]>([]);
+  const [manualItems, setManualItems] = useState<ManualRow[]>([]);
   const [productSearch, setProductSearch] = useState("");
-  const [selectedProducts, setSelectedProducts] = useState<DemandRow[]>([]);
 
   useEffect(() => setOrdered(readOrdered()), []);
 
+  // ── Automatic demand (unchanged engine) ───────────────────────────────────
   const { data: rows = [], isLoading, isFetching, refetch } = useQuery({
     queryKey: demandKeys.list,
     queryFn: fetchDemandRows,
     refetchOnWindowFocus: true,
   });
-  const suggestions = useMemo(() => {
-  if (!productSearch.trim()) return [];
 
-  const q = productSearch.toLowerCase();
+  // ── Manual purchase search: live suggestions over ALL active products ─────
+  const search = productSearch.trim();
+  const { data: suggestionsRaw = [] } = useQuery({
+    queryKey: ["demand-product-search", search],
+    enabled: search.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("products")
+        .select("id, name, code, unit, category_id, current_stock, min_stock, max_stock, categories(name)")
+        .eq("is_active", true)
+        .or(`name.ilike.%${search}%,code.ilike.%${search}%`)
+        .order("name")
+        .limit(8);
+      if (error) throw error;
+      return (data ?? []) as unknown as Array<{
+        id: string;
+        name: string;
+        code: string;
+        unit: string | null;
+        category_id: string | null;
+        current_stock: number | null;
+        min_stock: number | null;
+        max_stock: number | null;
+        categories: { name: string } | null;
+      }>;
+    },
+  });
 
-  return rows
-    .filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        p.code.toLowerCase().includes(q)
-    )
-    .filter(
-      (p) => !selectedProducts.some((x) => x.id === p.id)
-    )
-    .slice(0, 8);
-  }, [productSearch, rows, selectedProducts]);
+  const suggestions = useMemo(
+    () =>
+      suggestionsRaw
+        .filter((p) => !manualItems.some((m) => m.id === p.id))
+        .map((p) => ({
+          id: p.id,
+          name: p.name,
+          code: p.code,
+          unit: p.unit?.trim() || "pcs",
+          category_id: p.category_id,
+          category: p.categories?.name ?? "Uncategorised",
+          current_stock: Number(p.current_stock ?? 0),
+          min_stock: Number(p.min_stock ?? 0),
+          max_stock: Number(p.max_stock ?? 0),
+          required: 1,
+        })),
+    [suggestionsRaw, manualItems],
+  );
 
   // Categories stay in sync with the Categories module automatically.
   const { data: categories = [] } = useQuery({
@@ -86,28 +118,50 @@ function DemandListPage() {
     staleTime: 60_000,
   });
 
-  const visible = useMemo(() => {
-  const allRows = [...rows, ...manualItems, ...selectedProducts];
-
-  const q = term.trim().toLowerCase();
-
-  const filtered = allRows.filter((r) => {
+  function matches(r: DemandRow) {
     if (category !== "all" && r.category_id !== category) return false;
+    const q = term.trim().toLowerCase();
     if (!q) return true;
-
     return (
       r.name.toLowerCase().includes(q) ||
       r.code.toLowerCase().includes(q) ||
       r.category.toLowerCase().includes(q)
     );
-  });
+  }
 
-  return sortDemand(filtered, sortMode);
-}, [rows, manualItems, term, category, sortMode]);
+  // Automatic rows shown (manual duplicates are hidden from the auto list).
+  const autoVisible = useMemo(
+    () => sortDemand(rows.filter((r) => matches(r) && !manualItems.some((m) => m.id === r.id)), sortMode),
+    [rows, manualItems, term, category, sortMode],
+  );
+  const manualVisible = useMemo(
+    () => sortDemand(manualItems.filter(matches), sortMode) as ManualRow[],
+    [manualItems, term, category, sortMode],
+  );
 
-  const pending = visible.filter((r) => !ordered.includes(r.id));
-  const groups = groupByCategory(sortMode === "category" ? visible : visible);
-  const finalProducts = [...pending, ...selectedProducts];
+  const autoPending = autoVisible.filter((r) => !ordered.includes(r.id));
+  const groups = groupByCategory(autoVisible);
+  const printable = [...autoPending, ...manualVisible];
+
+  function addManual(row: DemandRow) {
+    setManualItems((prev) => {
+      const existing = prev.find((p) => p.id === row.id);
+      if (existing) {
+        return prev.map((p) => (p.id === row.id ? { ...p, required: p.required + 1 } : p));
+      }
+      return [...prev, { ...row, required: Math.max(1, row.required || 1), manual: true }];
+    });
+    setProductSearch("");
+    toast.success(`${row.name} added to manual list`);
+  }
+
+  function setQty(id: string, qty: number) {
+    setManualItems((prev) => prev.map((p) => (p.id === id ? { ...p, required: Math.max(1, Math.round(qty) || 1) } : p)));
+  }
+
+  function removeManual(id: string) {
+    setManualItems((prev) => prev.filter((p) => p.id !== id));
+  }
 
   function markOrdered(ids: string[]) {
     const next = [...new Set([...ordered, ...ids])];
@@ -124,14 +178,14 @@ function DemandListPage() {
 
   async function print(size: "80mm" | "A4") {
     try {
-      if (pending.length === 0) throw new Error("Nothing to print — every product is marked as ordered");
-      await printDemandList(pending, size);
+      if (printable.length === 0) throw new Error("Nothing to print — the demand list is empty");
+      await printDemandList(printable, size);
     } catch (e) {
       toast.error((e as Error).message || "Print failed");
     }
   }
 
-  const totalRequired = pending.reduce((s, r) => s + r.required, 0);
+  const totalRequired = printable.reduce((s, r) => s + r.required, 0);
 
   return (
     <AppShell title="Demand List" subtitle="Automatic Restocking Sheet">
@@ -141,7 +195,8 @@ function DemandListPage() {
             <div>
               <h2 className="text-[14px] font-semibold text-foreground">Products needing restock</h2>
               <p className="text-[12px] text-muted-foreground">
-                Generated automatically from live stock — {pending.length} product(s), {totalRequired} unit(s) required.
+                {autoPending.length} automatic + {manualVisible.length} manual product(s), {totalRequired} unit(s)
+                required.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -155,8 +210,8 @@ function DemandListPage() {
                 variant="outline"
                 size="sm"
                 className="gap-1.5"
-                disabled={pending.length === 0}
-                onClick={() => markOrdered(pending.map((r) => r.id))}
+                disabled={autoPending.length === 0}
+                onClick={() => markOrdered(autoPending.map((r) => r.id))}
               >
                 <ClipboardCheck className="h-3.5 w-3.5" /> Mark all ordered
               </Button>
@@ -164,94 +219,78 @@ function DemandListPage() {
                 <Printer className="h-3.5 w-3.5" /> Print (80mm)
               </Button>
               <Button
-  size="sm"
-  onClick={async () => {
-    const name = prompt("Product Name");
-    if (!name) return;
-
-    const qty = Number(prompt("Required Quantity") || "1");
-
-    setManualItems((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        name,
-        code: "MANUAL",
-        unit: "pcs",
-        category_id: null,
-        category: "Manual",
-        current_stock: 0,
-        min_stock: 0,
-        max_stock: qty,
-        required: qty,
-      },
-    ]);
-
-    toast.success("Manual product added");
-  }}
->
-  + Manual Product
-</Button>
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const name = prompt("Product Name");
+                  if (!name?.trim()) return;
+                  const qty = Math.max(1, Number(prompt("Required Quantity") || "1") || 1);
+                  setManualItems((prev) => [
+                    ...prev,
+                    {
+                      id: crypto.randomUUID(),
+                      name: name.trim(),
+                      code: "MANUAL",
+                      unit: "pcs",
+                      category_id: null,
+                      category: "Manual",
+                      current_stock: 0,
+                      min_stock: 0,
+                      max_stock: qty,
+                      required: qty,
+                      manual: true,
+                    },
+                  ]);
+                  toast.success("Manual product added");
+                }}
+              >
+                + Manual Product
+              </Button>
             </div>
           </header>
+
           <div className="flex flex-wrap items-center gap-2 border-b border-border px-6 py-3">
-          <div className="relative min-w-[350px] flex-1">
-
-
-  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-
-  <Input
-    value={productSearch}
-    onChange={(e) => setProductSearch(e.target.value)}
-    placeholder="Search Product..."
-    className="h-9 pl-9"
-  />
-
-  {suggestions.length > 0 && (
-    <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-md border bg-background shadow-lg">
-
-      {suggestions.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          className="flex w-full items-center justify-between px-3 py-2 hover:bg-muted text-left"
-          onClick={() => {
-  setSelectedProducts((prev) => {
-    if (prev.find((x) => x.id === item.id)) return prev;
-
-    return [
-      ...prev,
-      {
-        ...item,
-        required: 1,
-      },
-    ];
-  });
-
-  setProductSearch("");
-}}
-        >
-          <div>
-            <div className="font-medium">{item.name}</div>
-            <div className="text-xs text-muted-foreground">
-              {item.code}
+            <div className="relative min-w-[320px] flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={productSearch}
+                onChange={(e) => setProductSearch(e.target.value)}
+                placeholder="Search any product to add manually..."
+                className="h-9 pl-9"
+              />
+              {suggestions.length > 0 && (
+                <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-md border border-border bg-popover shadow-lg">
+                  {suggestions.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-muted"
+                      onClick={() => addManual(item)}
+                    >
+                      <div>
+                        <div className="text-[12.5px] font-medium text-foreground">{item.name}</div>
+                        <div className="font-mono text-[11px] text-muted-foreground">{item.code}</div>
+                      </div>
+                      <div className="text-right text-[11px] text-muted-foreground">
+                        <div>Stock</div>
+                        <div className="font-semibold text-foreground">
+                          {item.current_stock} {item.unit}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
-
-          <div className="text-right text-xs">
-            <div>Stock</div>
-            <div className="font-semibold">
-              {item.current_stock} {item.unit}
+            <div className="relative w-[240px]">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={term}
+                onChange={(e) => setTerm(e.target.value)}
+                placeholder="Filter list..."
+                className="h-9 pl-9"
+              />
             </div>
-          </div>
-
-        </button>
-      ))}
-
-    </div>
-  )}
-
-</div>
             <Select value={category} onValueChange={setCategory}>
               <SelectTrigger className="h-9 w-[220px] text-[12.5px]" aria-label="Filter by category">
                 <SelectValue placeholder="All categories" />
@@ -276,95 +315,133 @@ function DemandListPage() {
             </Select>
           </div>
 
-          {isLoading ? (
-  <p className="px-6 py-10 text-center text-[12.5px] text-muted-foreground">
-    Loading...
-  </p>
-) : finalProducts.length === 0 ? (
-  <p className="px-6 py-10 text-center text-[12.5px] text-muted-foreground">
-    Search and select products to create a demand list.
-  </p>
-) : (
-  <div className="overflow-x-auto">
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="border-b">
-          <th className="text-left p-3">Product</th>
-          <th className="text-center">Stock</th>
-          <th className="text-center">Qty</th>
-          <th className="text-center">Unit</th>
-          <th className="text-center">Action</th>
-        </tr>
-      </thead>
-
-      <tbody>
-        {finalProducts.map((item) => (
-          <tr key={item.id} className="border-b">
-
-            <td className="p-3">
-              <div className="font-medium">{item.name}</div>
-              <div className="text-xs text-muted-foreground">
-                {item.code}
+          {/* Manual purchase list */}
+          {manualVisible.length > 0 && (
+            <div className="border-b border-border">
+              <div className="px-6 py-2.5 text-[11.5px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Manually added ({manualVisible.length})
               </div>
-            </td>
+              <table className="w-full text-[12.5px]">
+                <thead>
+                  <tr className="border-y border-border bg-muted/40 text-[11.5px] uppercase tracking-wide text-muted-foreground">
+                    <th className="px-6 py-2 text-left">Product</th>
+                    <th className="px-4 py-2 text-left">Category</th>
+                    <th className="px-4 py-2 text-right">Stock</th>
+                    <th className="px-4 py-2 text-center">Required</th>
+                    <th className="px-4 py-2 text-left">Unit</th>
+                    <th className="px-6 py-2 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {manualVisible.map((item, i) => (
+                    <tr key={item.id} className={i % 2 ? "bg-muted/25" : ""}>
+                      <td className="px-6 py-2.5">
+                        <div className="font-medium text-foreground">{item.name}</div>
+                        <div className="font-mono text-[11px] text-muted-foreground">{item.code}</div>
+                      </td>
+                      <td className="px-4 py-2.5 text-muted-foreground">{item.category}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">{item.current_stock}</td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center justify-center gap-1">
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-7 w-7"
+                            aria-label={`Decrease quantity for ${item.name}`}
+                            onClick={() => setQty(item.id, item.required - 1)}
+                          >
+                            <Minus className="h-3.5 w-3.5" />
+                          </Button>
+                          <Input
+                            type="number"
+                            min={1}
+                            value={item.required}
+                            aria-label={`Quantity for ${item.name}`}
+                            className="h-7 w-16 text-center"
+                            onChange={(e) => setQty(item.id, Number(e.target.value))}
+                          />
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-7 w-7"
+                            aria-label={`Increase quantity for ${item.name}`}
+                            onClick={() => setQty(item.id, item.required + 1)}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5 text-muted-foreground">{item.unit}</td>
+                      <td className="px-6 py-2.5 text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 gap-1 text-[11.5px] text-destructive"
+                          onClick={() => removeManual(item.id)}
+                        >
+                          <X className="h-3.5 w-3.5" /> Remove
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
-            <td className="text-center">
-              {item.current_stock}
-            </td>
-
-            <td className="text-center">
-              <Input
-                type="number"
-                min={1}
-                value={item.required}
-                className="w-20 mx-auto text-center"
-                onChange={(e) => {
-                  const qty = Number(e.target.value);
-
-                  setSelectedProducts((prev) =>
-                    prev.map((p) =>
-                      p.id === item.id
-                        ? {
-                            ...p,
-                            required: qty,
-                          }
-                        : p
-                    )
-                  );
-                }}
-              />
-            </td>
-
-            <td className="text-center">
-              {item.unit}
-            </td>
-
-            <td className="text-center">
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() =>
-                  setSelectedProducts((prev) =>
-                    prev.filter((p) => p.id !== item.id)
-                  )
-                }
-              >
-                Remove
-              </Button>
-            </td>
-
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
-)}
+          {/* Automatic demand list (read-only) */}
+          {isLoading ? (
+            <p className="px-6 py-10 text-center text-[12.5px] text-muted-foreground">Loading...</p>
+          ) : autoVisible.length === 0 ? (
+            <p className="px-6 py-10 text-center text-[12.5px] text-muted-foreground">
+              No products currently need restocking.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-[12.5px]">
+                <thead className="sticky top-0 z-10">
+                  <tr className="border-b border-border bg-muted/40 text-[11.5px] uppercase tracking-wide text-muted-foreground">
+                    <th className="px-6 py-2 text-left">Product</th>
+                    <th className="px-4 py-2 text-left">Category</th>
+                    <th className="px-4 py-2 text-right">Stock</th>
+                    <th className="px-4 py-2 text-right">Min</th>
+                    <th className="px-4 py-2 text-right">Required</th>
+                    <th className="px-4 py-2 text-left">Unit</th>
+                    <th className="px-6 py-2 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {groups.map((g) => (
+                    <>
+                      <tr key={`h-${g.category}`}>
+                        <td
+                          colSpan={7}
+                          className="bg-muted/60 px-6 py-1.5 text-[11.5px] font-semibold uppercase tracking-wide text-foreground"
+                        >
+                          {g.category}
+                        </td>
+                      </tr>
+                      {g.rows.map((row, i) => (
+                        <DemandRowView
+                          key={row.id}
+                          row={row}
+                          striped={i % 2 === 1}
+                          ordered={ordered.includes(row.id)}
+                          onMark={() => markOrdered([row.id])}
+                          onUnmark={() => unmark(row.id)}
+                        />
+                      ))}
+                    </>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
       </div>
     </AppShell>
   );
 }
-
 
 function DemandRowView({
   row,
