@@ -37,17 +37,26 @@ export const Route = createFileRoute("/_authenticated/demand-list")({
   component: DemandListPage,
 });
 
-type ManualRow = DemandRow & { manual: true };
+type ManualRow = DemandRow & { manual: true; rowId: string };
+
+const manualKey = ["demand-manual-items"] as const;
 
 function DemandListPage() {
+  const qc = useQueryClient();
   const [term, setTerm] = useState("");
   const [category, setCategory] = useState("all");
   const [sortMode, setSortMode] = useState<DemandSort>("category");
   const [ordered, setOrdered] = useState<string[]>([]);
-  const [manualItems, setManualItems] = useState<ManualRow[]>([]);
   const [productSearch, setProductSearch] = useState("");
+  const [debounced, setDebounced] = useState("");
+  const [editingQty, setEditingQty] = useState<string | null>(null);
 
   useEffect(() => setOrdered(readOrdered()), []);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(productSearch.trim()), 300);
+    return () => clearTimeout(t);
+  }, [productSearch]);
 
   // ── Automatic demand (unchanged engine) ───────────────────────────────────
   const { data: rows = [], isLoading, isFetching, refetch } = useQuery({
@@ -56,8 +65,105 @@ function DemandListPage() {
     refetchOnWindowFocus: true,
   });
 
+  // ── Manual items (persisted) ──────────────────────────────────────────────
+  const { data: manualItems = [] } = useQuery({
+    queryKey: manualKey,
+    queryFn: async (): Promise<ManualRow[]> => {
+      const { data, error } = await supabase
+        .from("demand_manual_items")
+        .select(
+          "id, product_id, product_name, code, unit, quantity, products(current_stock, min_stock, max_stock, category_id, categories(name))",
+        )
+        .order("created_at");
+      if (error) throw error;
+      return ((data ?? []) as unknown as Array<{
+        id: string;
+        product_id: string | null;
+        product_name: string;
+        code: string;
+        unit: string;
+        quantity: number;
+        products: {
+          current_stock: number | null;
+          min_stock: number | null;
+          max_stock: number | null;
+          category_id: string | null;
+          categories: { name: string } | null;
+        } | null;
+      }>).map((r) => ({
+        id: r.product_id ?? r.id,
+        rowId: r.id,
+        manual: true as const,
+        name: r.product_name,
+        code: r.code,
+        unit: r.unit?.trim() || "pcs",
+        category_id: r.products?.category_id ?? null,
+        category: r.products?.categories?.name ?? "Manual",
+        current_stock: Number(r.products?.current_stock ?? 0),
+        min_stock: Number(r.products?.min_stock ?? 0),
+        max_stock: Number(r.products?.max_stock ?? 0),
+        required: Number(r.quantity ?? 1),
+      }));
+    },
+  });
+
+  const refreshManual = () => qc.invalidateQueries({ queryKey: manualKey });
+
+  const addMutation = useMutation({
+    mutationFn: async (row: DemandRow) => {
+      const existing = manualItems.find((m) => m.id === row.id);
+      if (existing) {
+        const { error } = await supabase
+          .from("demand_manual_items")
+          .update({ quantity: existing.required + 1 })
+          .eq("id", existing.rowId);
+        if (error) throw new Error(error.message);
+        return;
+      }
+      const { error } = await supabase.from("demand_manual_items").insert({
+        product_id: row.id,
+        product_name: row.name,
+        code: row.code,
+        unit: row.unit,
+        quantity: Math.max(1, row.required || 1),
+      });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: (_d, row) => {
+      setProductSearch("");
+      setDebounced("");
+      refreshManual();
+      toast.success(`${row.name} added to manual list`);
+    },
+    onError: (e: Error) => toast.error(e.message || "Could not add product"),
+  });
+
+  const qtyMutation = useMutation({
+    mutationFn: async ({ rowId, qty }: { rowId: string; qty: number }) => {
+      const { error } = await supabase
+        .from("demand_manual_items")
+        .update({ quantity: Math.max(1, Math.round(qty) || 1) })
+        .eq("id", rowId);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: refreshManual,
+    onError: (e: Error) => toast.error(e.message || "Could not update quantity"),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: async (rowId: string) => {
+      const { error } = await supabase.from("demand_manual_items").delete().eq("id", rowId);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      refreshManual();
+      toast.success("Removed from manual list");
+    },
+    onError: (e: Error) => toast.error(e.message || "Could not remove product"),
+  });
+
   // ── Manual purchase search: live suggestions over ALL active products ─────
-  const search = productSearch.trim();
+  const search = debounced;
   const { data: suggestionsRaw = [] } = useQuery({
     queryKey: ["demand-product-search", search],
     enabled: search.length > 0,
@@ -144,24 +250,17 @@ function DemandListPage() {
   const printable = [...autoPending, ...manualVisible];
 
   function addManual(row: DemandRow) {
-    setManualItems((prev) => {
-      const existing = prev.find((p) => p.id === row.id);
-      if (existing) {
-        return prev.map((p) => (p.id === row.id ? { ...p, required: p.required + 1 } : p));
-      }
-      return [...prev, { ...row, required: Math.max(1, row.required || 1), manual: true }];
-    });
-    setProductSearch("");
-    toast.success(`${row.name} added to manual list`);
+    addMutation.mutate(row);
   }
 
-  function setQty(id: string, qty: number) {
-    setManualItems((prev) => prev.map((p) => (p.id === id ? { ...p, required: Math.max(1, Math.round(qty) || 1) } : p)));
+  function setQty(rowId: string, qty: number) {
+    qtyMutation.mutate({ rowId, qty });
   }
 
-  function removeManual(id: string) {
-    setManualItems((prev) => prev.filter((p) => p.id !== id));
+  function removeManual(rowId: string) {
+    removeMutation.mutate(rowId);
   }
+
 
   function markOrdered(ids: string[]) {
     const next = [...new Set([...ordered, ...ids])];
