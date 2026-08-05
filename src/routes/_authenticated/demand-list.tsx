@@ -317,34 +317,6 @@ function DemandListPage() {
               <Button size="sm" className="gap-1.5" onClick={() => print("80mm")}>
                 <Printer className="h-3.5 w-3.5" /> Print (80mm)
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const name = prompt("Product Name");
-                  if (!name?.trim()) return;
-                  const qty = Math.max(1, Number(prompt("Required Quantity") || "1") || 1);
-                  setManualItems((prev) => [
-                    ...prev,
-                    {
-                      id: crypto.randomUUID(),
-                      name: name.trim(),
-                      code: "MANUAL",
-                      unit: "pcs",
-                      category_id: null,
-                      category: "Manual",
-                      current_stock: 0,
-                      min_stock: 0,
-                      max_stock: qty,
-                      required: qty,
-                      manual: true,
-                    },
-                  ]);
-                  toast.success("Manual product added");
-                }}
-              >
-                + Manual Product
-              </Button>
             </div>
           </header>
 
