@@ -190,6 +190,50 @@ export type Database = {
           },
         ]
       }
+      demand_manual_items: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string | null
+          id: string
+          product_id: string | null
+          product_name: string
+          quantity: number
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          product_id?: string | null
+          product_name: string
+          quantity?: number
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          product_id?: string | null
+          product_name?: string
+          quantity?: number
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "demand_manual_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: true
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoice_items: {
         Row: {
           created_at: string

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/phoenix/AppShell";
 import { Button } from "@/components/ui/button";
@@ -37,17 +37,26 @@ export const Route = createFileRoute("/_authenticated/demand-list")({
   component: DemandListPage,
 });
 
-type ManualRow = DemandRow & { manual: true };
+type ManualRow = DemandRow & { manual: true; rowId: string };
+
+const manualKey = ["demand-manual-items"] as const;
 
 function DemandListPage() {
+  const qc = useQueryClient();
   const [term, setTerm] = useState("");
   const [category, setCategory] = useState("all");
   const [sortMode, setSortMode] = useState<DemandSort>("category");
   const [ordered, setOrdered] = useState<string[]>([]);
-  const [manualItems, setManualItems] = useState<ManualRow[]>([]);
   const [productSearch, setProductSearch] = useState("");
+  const [debounced, setDebounced] = useState("");
+  const [editingQty, setEditingQty] = useState<string | null>(null);
 
   useEffect(() => setOrdered(readOrdered()), []);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(productSearch.trim()), 300);
+    return () => clearTimeout(t);
+  }, [productSearch]);
 
   // ── Automatic demand (unchanged engine) ───────────────────────────────────
   const { data: rows = [], isLoading, isFetching, refetch } = useQuery({
@@ -56,8 +65,105 @@ function DemandListPage() {
     refetchOnWindowFocus: true,
   });
 
+  // ── Manual items (persisted) ──────────────────────────────────────────────
+  const { data: manualItems = [] } = useQuery({
+    queryKey: manualKey,
+    queryFn: async (): Promise<ManualRow[]> => {
+      const { data, error } = await supabase
+        .from("demand_manual_items")
+        .select(
+          "id, product_id, product_name, code, unit, quantity, products(current_stock, min_stock, max_stock, category_id, categories(name))",
+        )
+        .order("created_at");
+      if (error) throw error;
+      return ((data ?? []) as unknown as Array<{
+        id: string;
+        product_id: string | null;
+        product_name: string;
+        code: string;
+        unit: string;
+        quantity: number;
+        products: {
+          current_stock: number | null;
+          min_stock: number | null;
+          max_stock: number | null;
+          category_id: string | null;
+          categories: { name: string } | null;
+        } | null;
+      }>).map((r) => ({
+        id: r.product_id ?? r.id,
+        rowId: r.id,
+        manual: true as const,
+        name: r.product_name,
+        code: r.code,
+        unit: r.unit?.trim() || "pcs",
+        category_id: r.products?.category_id ?? null,
+        category: r.products?.categories?.name ?? "Manual",
+        current_stock: Number(r.products?.current_stock ?? 0),
+        min_stock: Number(r.products?.min_stock ?? 0),
+        max_stock: Number(r.products?.max_stock ?? 0),
+        required: Number(r.quantity ?? 1),
+      }));
+    },
+  });
+
+  const refreshManual = () => qc.invalidateQueries({ queryKey: manualKey });
+
+  const addMutation = useMutation({
+    mutationFn: async (row: DemandRow) => {
+      const existing = manualItems.find((m) => m.id === row.id);
+      if (existing) {
+        const { error } = await supabase
+          .from("demand_manual_items")
+          .update({ quantity: existing.required + 1 })
+          .eq("id", existing.rowId);
+        if (error) throw new Error(error.message);
+        return;
+      }
+      const { error } = await supabase.from("demand_manual_items").insert({
+        product_id: row.id,
+        product_name: row.name,
+        code: row.code,
+        unit: row.unit,
+        quantity: Math.max(1, row.required || 1),
+      });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: (_d, row) => {
+      setProductSearch("");
+      setDebounced("");
+      refreshManual();
+      toast.success(`${row.name} added to manual list`);
+    },
+    onError: (e: Error) => toast.error(e.message || "Could not add product"),
+  });
+
+  const qtyMutation = useMutation({
+    mutationFn: async ({ rowId, qty }: { rowId: string; qty: number }) => {
+      const { error } = await supabase
+        .from("demand_manual_items")
+        .update({ quantity: Math.max(1, Math.round(qty) || 1) })
+        .eq("id", rowId);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: refreshManual,
+    onError: (e: Error) => toast.error(e.message || "Could not update quantity"),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: async (rowId: string) => {
+      const { error } = await supabase.from("demand_manual_items").delete().eq("id", rowId);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      refreshManual();
+      toast.success("Removed from manual list");
+    },
+    onError: (e: Error) => toast.error(e.message || "Could not remove product"),
+  });
+
   // ── Manual purchase search: live suggestions over ALL active products ─────
-  const search = productSearch.trim();
+  const search = debounced;
   const { data: suggestionsRaw = [] } = useQuery({
     queryKey: ["demand-product-search", search],
     enabled: search.length > 0,
@@ -144,24 +250,17 @@ function DemandListPage() {
   const printable = [...autoPending, ...manualVisible];
 
   function addManual(row: DemandRow) {
-    setManualItems((prev) => {
-      const existing = prev.find((p) => p.id === row.id);
-      if (existing) {
-        return prev.map((p) => (p.id === row.id ? { ...p, required: p.required + 1 } : p));
-      }
-      return [...prev, { ...row, required: Math.max(1, row.required || 1), manual: true }];
-    });
-    setProductSearch("");
-    toast.success(`${row.name} added to manual list`);
+    addMutation.mutate(row);
   }
 
-  function setQty(id: string, qty: number) {
-    setManualItems((prev) => prev.map((p) => (p.id === id ? { ...p, required: Math.max(1, Math.round(qty) || 1) } : p)));
+  function setQty(rowId: string, qty: number) {
+    qtyMutation.mutate({ rowId, qty });
   }
 
-  function removeManual(id: string) {
-    setManualItems((prev) => prev.filter((p) => p.id !== id));
+  function removeManual(rowId: string) {
+    removeMutation.mutate(rowId);
   }
+
 
   function markOrdered(ids: string[]) {
     const next = [...new Set([...ordered, ...ids])];
@@ -217,34 +316,6 @@ function DemandListPage() {
               </Button>
               <Button size="sm" className="gap-1.5" onClick={() => print("80mm")}>
                 <Printer className="h-3.5 w-3.5" /> Print (80mm)
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const name = prompt("Product Name");
-                  if (!name?.trim()) return;
-                  const qty = Math.max(1, Number(prompt("Required Quantity") || "1") || 1);
-                  setManualItems((prev) => [
-                    ...prev,
-                    {
-                      id: crypto.randomUUID(),
-                      name: name.trim(),
-                      code: "MANUAL",
-                      unit: "pcs",
-                      category_id: null,
-                      category: "Manual",
-                      current_stock: 0,
-                      min_stock: 0,
-                      max_stock: qty,
-                      required: qty,
-                      manual: true,
-                    },
-                  ]);
-                  toast.success("Manual product added");
-                }}
-              >
-                + Manual Product
               </Button>
             </div>
           </header>
@@ -334,7 +405,7 @@ function DemandListPage() {
                 </thead>
                 <tbody>
                   {manualVisible.map((item, i) => (
-                    <tr key={item.id} className={i % 2 ? "bg-muted/25" : ""}>
+                    <tr key={item.rowId} className={i % 2 ? "bg-muted/25" : ""}>
                       <td className="px-6 py-2.5">
                         <div className="font-medium text-foreground">{item.name}</div>
                         <div className="font-mono text-[11px] text-muted-foreground">{item.code}</div>
@@ -342,34 +413,23 @@ function DemandListPage() {
                       <td className="px-4 py-2.5 text-muted-foreground">{item.category}</td>
                       <td className="px-4 py-2.5 text-right tabular-nums">{item.current_stock}</td>
                       <td className="px-4 py-2.5">
-                        <div className="flex items-center justify-center gap-1">
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-7 w-7"
-                            aria-label={`Decrease quantity for ${item.name}`}
-                            onClick={() => setQty(item.id, item.required - 1)}
-                          >
-                            <Minus className="h-3.5 w-3.5" />
-                          </Button>
-                          <Input
-                            type="number"
-                            min={1}
+                        {editingQty === item.rowId ? (
+                          <QtyEditor
+                            name={item.name}
                             value={item.required}
-                            aria-label={`Quantity for ${item.name}`}
-                            className="h-7 w-16 text-center"
-                            onChange={(e) => setQty(item.id, Number(e.target.value))}
+                            onCommit={(v) => setQty(item.rowId, v)}
+                            onDone={() => setEditingQty(null)}
                           />
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-7 w-7"
-                            aria-label={`Increase quantity for ${item.name}`}
-                            onClick={() => setQty(item.id, item.required + 1)}
+                        ) : (
+                          <button
+                            type="button"
+                            className="mx-auto block rounded-md px-3 py-1 text-center font-semibold tabular-nums text-foreground hover:bg-muted"
+                            aria-label={`Edit quantity for ${item.name}`}
+                            onClick={() => setEditingQty(item.rowId)}
                           >
-                            <Plus className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
+                            {item.required}
+                          </button>
+                        )}
                       </td>
                       <td className="px-4 py-2.5 text-muted-foreground">{item.unit}</td>
                       <td className="px-6 py-2.5 text-right">
@@ -377,13 +437,14 @@ function DemandListPage() {
                           variant="ghost"
                           size="sm"
                           className="h-7 gap-1 text-[11.5px] text-destructive"
-                          onClick={() => removeManual(item.id)}
+                          onClick={() => removeManual(item.rowId)}
                         >
                           <X className="h-3.5 w-3.5" /> Remove
                         </Button>
                       </td>
                     </tr>
                   ))}
+
                 </tbody>
               </table>
             </div>
@@ -479,5 +540,76 @@ function DemandRowView({
         )}
       </td>
     </tr>
+  );
+}
+
+function QtyEditor({
+  name,
+  value,
+  onCommit,
+  onDone,
+}: {
+  name: string;
+  value: number;
+  onCommit: (qty: number) => void;
+  onDone: () => void;
+}) {
+  const [draft, setDraft] = useState(String(value));
+
+  const commit = (raw: string) => {
+    const n = Math.max(1, Math.round(Number(raw)) || 1);
+    if (n !== value) onCommit(n);
+    return n;
+  };
+
+  const finish = () => {
+    commit(draft);
+    onDone();
+  };
+
+  const step = (delta: number) => {
+    const next = Math.max(1, (Math.round(Number(draft)) || 0) + delta);
+    setDraft(String(next));
+    onCommit(next);
+  };
+
+  return (
+    <div
+      className="flex items-center justify-center gap-1"
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) finish();
+      }}
+    >
+      <Button
+        variant="outline"
+        size="icon"
+        className="h-7 w-7"
+        aria-label={`Decrease quantity for ${name}`}
+        onClick={() => step(-1)}
+      >
+        <Minus className="h-3.5 w-3.5" />
+      </Button>
+      <Input
+        autoFocus
+        inputMode="numeric"
+        value={draft}
+        aria-label={`Quantity for ${name}`}
+        className="h-7 w-20 text-center"
+        onChange={(e) => setDraft(e.target.value.replace(/[^0-9]/g, ""))}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") finish();
+          if (e.key === "Escape") onDone();
+        }}
+      />
+      <Button
+        variant="outline"
+        size="icon"
+        className="h-7 w-7"
+        aria-label={`Increase quantity for ${name}`}
+        onClick={() => step(1)}
+      >
+        <Plus className="h-3.5 w-3.5" />
+      </Button>
+    </div>
   );
 }
