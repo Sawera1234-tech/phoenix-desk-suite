@@ -542,3 +542,74 @@ function DemandRowView({
     </tr>
   );
 }
+
+function QtyEditor({
+  name,
+  value,
+  onCommit,
+  onDone,
+}: {
+  name: string;
+  value: number;
+  onCommit: (qty: number) => void;
+  onDone: () => void;
+}) {
+  const [draft, setDraft] = useState(String(value));
+
+  const commit = (raw: string) => {
+    const n = Math.max(1, Math.round(Number(raw)) || 1);
+    if (n !== value) onCommit(n);
+    return n;
+  };
+
+  const finish = () => {
+    commit(draft);
+    onDone();
+  };
+
+  const step = (delta: number) => {
+    const next = Math.max(1, (Math.round(Number(draft)) || 0) + delta);
+    setDraft(String(next));
+    onCommit(next);
+  };
+
+  return (
+    <div
+      className="flex items-center justify-center gap-1"
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) finish();
+      }}
+    >
+      <Button
+        variant="outline"
+        size="icon"
+        className="h-7 w-7"
+        aria-label={`Decrease quantity for ${name}`}
+        onClick={() => step(-1)}
+      >
+        <Minus className="h-3.5 w-3.5" />
+      </Button>
+      <Input
+        autoFocus
+        inputMode="numeric"
+        value={draft}
+        aria-label={`Quantity for ${name}`}
+        className="h-7 w-20 text-center"
+        onChange={(e) => setDraft(e.target.value.replace(/[^0-9]/g, ""))}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") finish();
+          if (e.key === "Escape") onDone();
+        }}
+      />
+      <Button
+        variant="outline"
+        size="icon"
+        className="h-7 w-7"
+        aria-label={`Increase quantity for ${name}`}
+        onClick={() => step(1)}
+      >
+        <Plus className="h-3.5 w-3.5" />
+      </Button>
+    </div>
+  );
+}
