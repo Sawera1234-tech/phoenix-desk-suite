@@ -405,7 +405,7 @@ function DemandListPage() {
                 </thead>
                 <tbody>
                   {manualVisible.map((item, i) => (
-                    <tr key={item.id} className={i % 2 ? "bg-muted/25" : ""}>
+                    <tr key={item.rowId} className={i % 2 ? "bg-muted/25" : ""}>
                       <td className="px-6 py-2.5">
                         <div className="font-medium text-foreground">{item.name}</div>
                         <div className="font-mono text-[11px] text-muted-foreground">{item.code}</div>
@@ -413,34 +413,23 @@ function DemandListPage() {
                       <td className="px-4 py-2.5 text-muted-foreground">{item.category}</td>
                       <td className="px-4 py-2.5 text-right tabular-nums">{item.current_stock}</td>
                       <td className="px-4 py-2.5">
-                        <div className="flex items-center justify-center gap-1">
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-7 w-7"
-                            aria-label={`Decrease quantity for ${item.name}`}
-                            onClick={() => setQty(item.id, item.required - 1)}
-                          >
-                            <Minus className="h-3.5 w-3.5" />
-                          </Button>
-                          <Input
-                            type="number"
-                            min={1}
+                        {editingQty === item.rowId ? (
+                          <QtyEditor
+                            name={item.name}
                             value={item.required}
-                            aria-label={`Quantity for ${item.name}`}
-                            className="h-7 w-16 text-center"
-                            onChange={(e) => setQty(item.id, Number(e.target.value))}
+                            onCommit={(v) => setQty(item.rowId, v)}
+                            onDone={() => setEditingQty(null)}
                           />
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-7 w-7"
-                            aria-label={`Increase quantity for ${item.name}`}
-                            onClick={() => setQty(item.id, item.required + 1)}
+                        ) : (
+                          <button
+                            type="button"
+                            className="mx-auto block rounded-md px-3 py-1 text-center font-semibold tabular-nums text-foreground hover:bg-muted"
+                            aria-label={`Edit quantity for ${item.name}`}
+                            onClick={() => setEditingQty(item.rowId)}
                           >
-                            <Plus className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
+                            {item.required}
+                          </button>
+                        )}
                       </td>
                       <td className="px-4 py-2.5 text-muted-foreground">{item.unit}</td>
                       <td className="px-6 py-2.5 text-right">
@@ -448,13 +437,14 @@ function DemandListPage() {
                           variant="ghost"
                           size="sm"
                           className="h-7 gap-1 text-[11.5px] text-destructive"
-                          onClick={() => removeManual(item.id)}
+                          onClick={() => removeManual(item.rowId)}
                         >
                           <X className="h-3.5 w-3.5" /> Remove
                         </Button>
                       </td>
                     </tr>
                   ))}
+
                 </tbody>
               </table>
             </div>
