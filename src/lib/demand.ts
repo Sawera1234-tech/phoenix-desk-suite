@@ -122,6 +122,26 @@ export function writeOrdered(ids: string[]) {
   window.localStorage.setItem(orderedKey(), JSON.stringify([...new Set(ids)]));
 }
 
+// ── Manual quantity overrides for automatic rows (device-local, per day) ────
+
+const qtyKey = () => `phoenix.demand.qty.${new Date().toISOString().slice(0, 10)}`;
+
+export type QtyOverrides = Record<string, number>;
+
+export function readQtyOverrides(): QtyOverrides {
+  if (typeof window === "undefined") return {};
+  try {
+    return JSON.parse(window.localStorage.getItem(qtyKey()) ?? "{}") as QtyOverrides;
+  } catch {
+    return {};
+  }
+}
+
+export function writeQtyOverrides(map: QtyOverrides) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(qtyKey(), JSON.stringify(map));
+}
+
 // ── Printing ────────────────────────────────────────────────────────────────
 
 const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c] as string);
