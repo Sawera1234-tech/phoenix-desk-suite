@@ -521,6 +521,10 @@ function DemandListPage() {
                           row={row}
                           striped={i % 2 === 1}
                           ordered={ordered.includes(row.id)}
+                          editing={editingQty === row.id}
+                          onEdit={() => setEditingQty(row.id)}
+                          onEditDone={() => setEditingQty(null)}
+                          onQty={(v) => setAutoQty(row.id, v)}
                           onMark={() => markOrdered([row.id])}
                           onUnmark={() => unmark(row.id)}
                         />
