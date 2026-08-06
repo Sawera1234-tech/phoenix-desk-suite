@@ -122,7 +122,7 @@ function DemandListPage() {
       if (existing) {
         const { error } = await supabase
           .from("demand_manual_items")
-          .update({ quantity: existing.required + 1 })
+          .update({ quantity: Math.max(1, row.required || 1) })
           .eq("id", existing.rowId);
         if (error) throw new Error(error.message);
         return;
