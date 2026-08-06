@@ -14,10 +14,13 @@ import {
   groupByCategory,
   printDemandList,
   readOrdered,
+  readQtyOverrides,
   sortDemand,
   writeOrdered,
+  writeQtyOverrides,
   type DemandRow,
   type DemandSort,
+  type QtyOverrides,
 } from "@/lib/demand";
 
 export const Route = createFileRoute("/_authenticated/demand-list")({
@@ -50,8 +53,12 @@ function DemandListPage() {
   const [productSearch, setProductSearch] = useState("");
   const [debounced, setDebounced] = useState("");
   const [editingQty, setEditingQty] = useState<string | null>(null);
+  const [overrides, setOverrides] = useState<QtyOverrides>({});
 
-  useEffect(() => setOrdered(readOrdered()), []);
+  useEffect(() => {
+    setOrdered(readOrdered());
+    setOverrides(readQtyOverrides());
+  }, []);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(productSearch.trim()), 300);
@@ -115,7 +122,7 @@ function DemandListPage() {
       if (existing) {
         const { error } = await supabase
           .from("demand_manual_items")
-          .update({ quantity: existing.required + 1 })
+          .update({ quantity: Math.max(1, row.required || 1) })
           .eq("id", existing.rowId);
         if (error) throw new Error(error.message);
         return;
@@ -192,21 +199,19 @@ function DemandListPage() {
 
   const suggestions = useMemo(
     () =>
-      suggestionsRaw
-        .filter((p) => !manualItems.some((m) => m.id === p.id))
-        .map((p) => ({
-          id: p.id,
-          name: p.name,
-          code: p.code,
-          unit: p.unit?.trim() || "pcs",
-          category_id: p.category_id,
-          category: p.categories?.name ?? "Uncategorised",
-          current_stock: Number(p.current_stock ?? 0),
-          min_stock: Number(p.min_stock ?? 0),
-          max_stock: Number(p.max_stock ?? 0),
-          required: 1,
-        })),
-    [suggestionsRaw, manualItems],
+      suggestionsRaw.map((p) => ({
+        id: p.id,
+        name: p.name,
+        code: p.code,
+        unit: p.unit?.trim() || "pcs",
+        category_id: p.category_id,
+        category: p.categories?.name ?? "Uncategorised",
+        current_stock: Number(p.current_stock ?? 0),
+        min_stock: Number(p.min_stock ?? 0),
+        max_stock: Number(p.max_stock ?? 0),
+        required: 1,
+      })),
+    [suggestionsRaw],
   );
 
   // Categories stay in sync with the Categories module automatically.
@@ -237,8 +242,14 @@ function DemandListPage() {
 
   // Automatic rows shown (manual duplicates are hidden from the auto list).
   const autoVisible = useMemo(
-    () => sortDemand(rows.filter((r) => matches(r) && !manualItems.some((m) => m.id === r.id)), sortMode),
-    [rows, manualItems, term, category, sortMode],
+    () =>
+      sortDemand(
+        rows
+          .filter((r) => matches(r) && !manualItems.some((m) => m.id === r.id))
+          .map((r) => (overrides[r.id] != null ? { ...r, required: overrides[r.id] } : r)),
+        sortMode,
+      ),
+    [rows, manualItems, overrides, term, category, sortMode],
   );
   const manualVisible = useMemo(
     () => sortDemand(manualItems.filter(matches), sortMode) as ManualRow[],
@@ -250,11 +261,33 @@ function DemandListPage() {
   const printable = [...autoPending, ...manualVisible];
 
   function addManual(row: DemandRow) {
+    const existingManual = manualItems.find((m) => m.id === row.id);
+    if (existingManual) {
+      toast.info("This product is already in the demand list.");
+      setProductSearch("");
+      setDebounced("");
+      setEditingQty(existingManual.rowId);
+      return;
+    }
+    const existingAuto = rows.find((r) => r.id === row.id);
+    if (existingAuto) {
+      toast.info("This product is already in the demand list.");
+      setProductSearch("");
+      setDebounced("");
+      setEditingQty(existingAuto.id);
+      return;
+    }
     addMutation.mutate(row);
   }
 
   function setQty(rowId: string, qty: number) {
     qtyMutation.mutate({ rowId, qty });
+  }
+
+  function setAutoQty(productId: string, qty: number) {
+    const next = { ...overrides, [productId]: Math.max(1, Math.round(qty) || 1) };
+    setOverrides(next);
+    writeQtyOverrides(next);
   }
 
   function removeManual(rowId: string) {
@@ -488,6 +521,10 @@ function DemandListPage() {
                           row={row}
                           striped={i % 2 === 1}
                           ordered={ordered.includes(row.id)}
+                          editing={editingQty === row.id}
+                          onEdit={() => setEditingQty(row.id)}
+                          onEditDone={() => setEditingQty(null)}
+                          onQty={(v) => setAutoQty(row.id, v)}
                           onMark={() => markOrdered([row.id])}
                           onUnmark={() => unmark(row.id)}
                         />
@@ -508,12 +545,20 @@ function DemandRowView({
   row,
   striped,
   ordered,
+  editing,
+  onEdit,
+  onEditDone,
+  onQty,
   onMark,
   onUnmark,
 }: {
   row: DemandRow;
   striped: boolean;
   ordered: boolean;
+  editing: boolean;
+  onEdit: () => void;
+  onEditDone: () => void;
+  onQty: (qty: number) => void;
   onMark: () => void;
   onUnmark: () => void;
 }) {
@@ -526,8 +571,22 @@ function DemandRowView({
       <td className="px-4 py-2.5 text-muted-foreground">{row.category}</td>
       <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-destructive">{row.current_stock}</td>
       <td className="px-4 py-2.5 text-right tabular-nums">{row.min_stock}</td>
-      <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-foreground">{row.required}</td>
+      <td className="px-4 py-2.5">
+        {editing ? (
+          <QtyEditor name={row.name} value={row.required} onCommit={onQty} onDone={onEditDone} />
+        ) : (
+          <button
+            type="button"
+            className="ml-auto block rounded-md px-3 py-1 text-right font-semibold tabular-nums text-foreground hover:bg-muted"
+            aria-label={`Edit quantity for ${row.name}`}
+            onClick={onEdit}
+          >
+            {row.required}
+          </button>
+        )}
+      </td>
       <td className="px-4 py-2.5 text-muted-foreground">{row.unit}</td>
+
       <td className="px-6 py-2.5 text-right">
         {ordered ? (
           <Button variant="ghost" size="sm" className="h-7 gap-1 text-[11.5px] text-success" onClick={onUnmark}>
