@@ -242,8 +242,14 @@ function DemandListPage() {
 
   // Automatic rows shown (manual duplicates are hidden from the auto list).
   const autoVisible = useMemo(
-    () => sortDemand(rows.filter((r) => matches(r) && !manualItems.some((m) => m.id === r.id)), sortMode),
-    [rows, manualItems, term, category, sortMode],
+    () =>
+      sortDemand(
+        rows
+          .filter((r) => matches(r) && !manualItems.some((m) => m.id === r.id))
+          .map((r) => (overrides[r.id] != null ? { ...r, required: overrides[r.id] } : r)),
+        sortMode,
+      ),
+    [rows, manualItems, overrides, term, category, sortMode],
   );
   const manualVisible = useMemo(
     () => sortDemand(manualItems.filter(matches), sortMode) as ManualRow[],
@@ -255,11 +261,33 @@ function DemandListPage() {
   const printable = [...autoPending, ...manualVisible];
 
   function addManual(row: DemandRow) {
+    const existingManual = manualItems.find((m) => m.id === row.id);
+    if (existingManual) {
+      toast.info("This product is already in the demand list.");
+      setProductSearch("");
+      setDebounced("");
+      setEditingQty(existingManual.rowId);
+      return;
+    }
+    const existingAuto = rows.find((r) => r.id === row.id);
+    if (existingAuto) {
+      toast.info("This product is already in the demand list.");
+      setProductSearch("");
+      setDebounced("");
+      setEditingQty(existingAuto.id);
+      return;
+    }
     addMutation.mutate(row);
   }
 
   function setQty(rowId: string, qty: number) {
     qtyMutation.mutate({ rowId, qty });
+  }
+
+  function setAutoQty(productId: string, qty: number) {
+    const next = { ...overrides, [productId]: Math.max(1, Math.round(qty) || 1) };
+    setOverrides(next);
+    writeQtyOverrides(next);
   }
 
   function removeManual(rowId: string) {
