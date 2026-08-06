@@ -545,12 +545,20 @@ function DemandRowView({
   row,
   striped,
   ordered,
+  editing,
+  onEdit,
+  onEditDone,
+  onQty,
   onMark,
   onUnmark,
 }: {
   row: DemandRow;
   striped: boolean;
   ordered: boolean;
+  editing: boolean;
+  onEdit: () => void;
+  onEditDone: () => void;
+  onQty: (qty: number) => void;
   onMark: () => void;
   onUnmark: () => void;
 }) {
@@ -563,8 +571,22 @@ function DemandRowView({
       <td className="px-4 py-2.5 text-muted-foreground">{row.category}</td>
       <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-destructive">{row.current_stock}</td>
       <td className="px-4 py-2.5 text-right tabular-nums">{row.min_stock}</td>
-      <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-foreground">{row.required}</td>
+      <td className="px-4 py-2.5">
+        {editing ? (
+          <QtyEditor name={row.name} value={row.required} onCommit={onQty} onDone={onEditDone} />
+        ) : (
+          <button
+            type="button"
+            className="ml-auto block rounded-md px-3 py-1 text-right font-semibold tabular-nums text-foreground hover:bg-muted"
+            aria-label={`Edit quantity for ${row.name}`}
+            onClick={onEdit}
+          >
+            {row.required}
+          </button>
+        )}
+      </td>
       <td className="px-4 py-2.5 text-muted-foreground">{row.unit}</td>
+
       <td className="px-6 py-2.5 text-right">
         {ordered ? (
           <Button variant="ghost" size="sm" className="h-7 gap-1 text-[11.5px] text-success" onClick={onUnmark}>
