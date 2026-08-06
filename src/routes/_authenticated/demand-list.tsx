@@ -53,8 +53,12 @@ function DemandListPage() {
   const [productSearch, setProductSearch] = useState("");
   const [debounced, setDebounced] = useState("");
   const [editingQty, setEditingQty] = useState<string | null>(null);
+  const [overrides, setOverrides] = useState<QtyOverrides>({});
 
-  useEffect(() => setOrdered(readOrdered()), []);
+  useEffect(() => {
+    setOrdered(readOrdered());
+    setOverrides(readQtyOverrides());
+  }, []);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(productSearch.trim()), 300);
