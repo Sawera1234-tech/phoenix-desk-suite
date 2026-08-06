@@ -334,6 +334,63 @@ function itemsPayloadFrom(lines: DraftLineItem[], invoiceId: string) {
     }));
 }
 
+/**
+ * Ledger postings for an invoice: the full invoice value is a DEBIT and any
+ * amount collected with the invoice is a CREDIT. The database recalculates
+ * every running balance from these rows, so nothing is computed client-side.
+ */
+function invoiceLedgerRows(args: {
+  invoiceId: string;
+  invoiceNumber: string;
+  shopkeeperId: string;
+  invoiceDate: string;
+  total: number;
+  paid: number;
+  userId: string | null;
+}) {
+  if (!args.shopkeeperId) return [];
+  const rows: {
+    shopkeeper_id: string;
+    entry_date: string;
+    amount: number;
+    entry_type: string;
+    description: string;
+    reference_type: string;
+    reference_id: string;
+    created_by: string | null;
+  }[] = [];
+  const total = Number(args.total ?? 0);
+  const paid = Number(args.paid ?? 0);
+
+  if (total > 0) {
+    rows.push({
+      shopkeeper_id: args.shopkeeperId,
+      entry_date: args.invoiceDate,
+      amount: total,
+      entry_type: "debit",
+      description: `Invoice ${args.invoiceNumber}`,
+      reference_type: "invoice",
+      reference_id: args.invoiceId,
+      created_by: args.userId,
+    });
+  }
+  if (paid > 0) {
+    rows.push({
+      shopkeeper_id: args.shopkeeperId,
+      entry_date: args.invoiceDate,
+      amount: paid,
+      entry_type: "payment",
+      description: `Payment with invoice ${args.invoiceNumber}`,
+      reference_type: "invoice_payment",
+      reference_id: args.invoiceId,
+      created_by: args.userId,
+    });
+  }
+  return rows;
+}
+
+
+
 export async function createInvoice(form: InvoiceFormData): Promise<Invoice> {
   const total = calcSubtotal(form.lines);
   const status = calcInvoiceStatus(total, form.paid);
@@ -366,20 +423,20 @@ export async function createInvoice(form: InvoiceFormData): Promise<Invoice> {
     if (itemsError) throw itemsError;
   }
 
-  const remaining = calcRemaining(total, form.paid);
-  if (remaining > 0 && form.shopkeeper_id) {
-    const { error: ledgerError } = await supabase.from("ledger_entries").insert({
-      shopkeeper_id: form.shopkeeper_id,
-      entry_date: form.invoice_date,
-      amount: remaining,
-      entry_type: "debit",
-      description: `Invoice ${invoiceNumber} — outstanding balance`,
-      reference_type: "invoice",
-      reference_id: mapped.id,
-      created_by: userId,
-    });
+  const ledgerRows = invoiceLedgerRows({
+    invoiceId: mapped.id,
+    invoiceNumber,
+    shopkeeperId: form.shopkeeper_id,
+    invoiceDate: form.invoice_date,
+    total,
+    paid: form.paid,
+    userId,
+  });
+  if (ledgerRows.length > 0) {
+    const { error: ledgerError } = await supabase.from("ledger_entries").insert(ledgerRows);
     if (ledgerError) throw ledgerError;
   }
+
 
   await logAudit({
     table: "invoices",
@@ -397,7 +454,8 @@ export async function updateInvoice(id: string, form: InvoiceFormData): Promise<
   const status = calcInvoiceStatus(total, form.paid);
   const userId = await currentUserId();
 
-  // ── 1. Reverse the OLD invoice balance from the shopkeeper before saving ──
+  // Old ledger entries are removed further down; the database recalc engine
+  // re-derives the customer balance, so no manual balance adjustment is done.
   const { data: existing, error: existingError } = await supabase
     .from("invoices")
     .select("shopkeeper_id, total, amount_paid")
@@ -405,26 +463,7 @@ export async function updateInvoice(id: string, form: InvoiceFormData): Promise<
     .single();
   if (existingError) throw existingError;
 
-  const oldRemaining = calcRemaining(
-    Number(existing?.total ?? 0),
-    Number(existing?.amount_paid ?? 0),
-  );
-  const oldShopkeeperId = existing?.shopkeeper_id ?? null;
 
-  if (oldShopkeeperId && oldRemaining !== 0) {
-    const { data: sk, error: skError } = await supabase
-      .from("shopkeepers")
-      .select("current_balance")
-      .eq("id", oldShopkeeperId)
-      .single();
-    if (skError) throw skError;
-
-    const { error: reverseError } = await supabase
-      .from("shopkeepers")
-      .update({ current_balance: Number(sk?.current_balance ?? 0) - oldRemaining })
-      .eq("id", oldShopkeeperId);
-    if (reverseError) throw reverseError;
-  }
 
 
   const { data: invoice, error: invoiceError } = await supabase
@@ -461,24 +500,24 @@ export async function updateInvoice(id: string, form: InvoiceFormData): Promise<
   const { error: deleteLedgerError } = await supabase
     .from("ledger_entries")
     .delete()
-    .eq("reference_type", "invoice")
+    .in("reference_type", ["invoice", "invoice_payment"])
     .eq("reference_id", id);
   if (deleteLedgerError) throw deleteLedgerError;
 
-  const remaining = calcRemaining(total, form.paid);
-  if (remaining > 0 && form.shopkeeper_id) {
-    const { error: ledgerError } = await supabase.from("ledger_entries").insert({
-      shopkeeper_id: form.shopkeeper_id,
-      entry_date: form.invoice_date,
-      amount: remaining,
-      entry_type: "debit",
-      description: `Invoice ${mapped.invoice_number} — outstanding balance`,
-      reference_type: "invoice",
-      reference_id: id,
-      created_by: userId,
-    });
+  const ledgerRows = invoiceLedgerRows({
+    invoiceId: id,
+    invoiceNumber: mapped.invoice_number,
+    shopkeeperId: form.shopkeeper_id,
+    invoiceDate: form.invoice_date,
+    total,
+    paid: form.paid,
+    userId,
+  });
+  if (ledgerRows.length > 0) {
+    const { error: ledgerError } = await supabase.from("ledger_entries").insert(ledgerRows);
     if (ledgerError) throw ledgerError;
   }
+
 
   await logAudit({
     table: "invoices",
@@ -503,30 +542,15 @@ export async function deleteInvoice(id: string): Promise<void> {
     .single();
   if (existingError) throw existingError;
 
-  const oldRemaining = calcRemaining(Number(existing?.total ?? 0), Number(existing?.amount_paid ?? 0));
-  const shopkeeperId = existing?.shopkeeper_id ?? null;
-
+  // Removing the ledger entries is enough: the database recalc engine
+  // re-derives every running balance and the customer's outstanding balance.
   const { error: ledgerError } = await supabase
     .from("ledger_entries")
     .delete()
-    .eq("reference_type", "invoice")
+    .in("reference_type", ["invoice", "invoice_payment"])
     .eq("reference_id", id);
   if (ledgerError) throw ledgerError;
 
-  if (shopkeeperId && oldRemaining !== 0) {
-    const { data: sk, error: skError } = await supabase
-      .from("shopkeepers")
-      .select("current_balance")
-      .eq("id", shopkeeperId)
-      .single();
-    if (skError) throw skError;
-
-    const { error: balError } = await supabase
-      .from("shopkeepers")
-      .update({ current_balance: Number(sk?.current_balance ?? 0) - oldRemaining })
-      .eq("id", shopkeeperId);
-    if (balError) throw balError;
-  }
 
   const { error: itemsError } = await supabase.from("invoice_items").delete().eq("invoice_id", id);
   if (itemsError) throw itemsError;
