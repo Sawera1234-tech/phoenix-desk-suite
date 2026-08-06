@@ -199,21 +199,19 @@ function DemandListPage() {
 
   const suggestions = useMemo(
     () =>
-      suggestionsRaw
-        .filter((p) => !manualItems.some((m) => m.id === p.id))
-        .map((p) => ({
-          id: p.id,
-          name: p.name,
-          code: p.code,
-          unit: p.unit?.trim() || "pcs",
-          category_id: p.category_id,
-          category: p.categories?.name ?? "Uncategorised",
-          current_stock: Number(p.current_stock ?? 0),
-          min_stock: Number(p.min_stock ?? 0),
-          max_stock: Number(p.max_stock ?? 0),
-          required: 1,
-        })),
-    [suggestionsRaw, manualItems],
+      suggestionsRaw.map((p) => ({
+        id: p.id,
+        name: p.name,
+        code: p.code,
+        unit: p.unit?.trim() || "pcs",
+        category_id: p.category_id,
+        category: p.categories?.name ?? "Uncategorised",
+        current_stock: Number(p.current_stock ?? 0),
+        min_stock: Number(p.min_stock ?? 0),
+        max_stock: Number(p.max_stock ?? 0),
+        required: 1,
+      })),
+    [suggestionsRaw],
   );
 
   // Categories stay in sync with the Categories module automatically.
