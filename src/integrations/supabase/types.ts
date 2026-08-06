@@ -397,6 +397,56 @@ export type Database = {
           },
         ]
       }
+      payments: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          id: string
+          method: string
+          notes: string | null
+          payment_date: string
+          payment_no: string
+          reference: string | null
+          shopkeeper_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          method?: string
+          notes?: string | null
+          payment_date?: string
+          payment_no?: string
+          reference?: string | null
+          shopkeeper_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          method?: string
+          notes?: string | null
+          payment_date?: string
+          payment_no?: string
+          reference?: string | null
+          shopkeeper_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_shopkeeper_id_fkey"
+            columns: ["shopkeeper_id"]
+            isOneToOne: false
+            referencedRelation: "shopkeepers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           brand_id: string | null
@@ -710,6 +760,10 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
+      recalc_shopkeeper_ledger: {
+        Args: { _shopkeeper_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: "admin" | "operator"

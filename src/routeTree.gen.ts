@@ -26,6 +26,7 @@ import { Route as AuthenticatedCategoriesRouteImport } from './routes/_authentic
 import { Route as AuthenticatedBrandsRouteImport } from './routes/_authenticated/brands'
 import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
 import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
+import { Route as AuthenticatedLedgerCustomerIdRouteImport } from './routes/_authenticated/ledger.$customerId'
 import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 
@@ -116,6 +117,12 @@ const Char91DotmcpChar93ListToolsRoute =
     path: '/.mcp/list-tools',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AuthenticatedLedgerCustomerIdRoute =
+  AuthenticatedLedgerCustomerIdRouteImport.update({
+    id: '/ledger/$customerId',
+    path: '/ledger/$customerId',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const Char91DotmcpChar93InvokeToolToolRoute =
   Char91DotmcpChar93InvokeToolToolRouteImport.update({
     id: '/.mcp/invoke-tool/$tool',
@@ -147,6 +154,7 @@ export interface FileRoutesByFullPath {
   '/wholesale': typeof AuthenticatedWholesaleRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
+  '/ledger/$customerId': typeof AuthenticatedLedgerCustomerIdRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -167,6 +175,7 @@ export interface FileRoutesByTo {
   '/': typeof AuthenticatedIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
+  '/ledger/$customerId': typeof AuthenticatedLedgerCustomerIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -189,6 +198,7 @@ export interface FileRoutesById {
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
+  '/_authenticated/ledger/$customerId': typeof AuthenticatedLedgerCustomerIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -211,6 +221,7 @@ export interface FileRouteTypes {
     | '/wholesale'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
+    | '/ledger/$customerId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -231,6 +242,7 @@ export interface FileRouteTypes {
     | '/'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
+    | '/ledger/$customerId'
   id:
     | '__root__'
     | '/_authenticated'
@@ -252,6 +264,7 @@ export interface FileRouteTypes {
     | '/_authenticated/'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
+    | '/_authenticated/ledger/$customerId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -385,6 +398,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Char91DotmcpChar93ListToolsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/ledger/$customerId': {
+      id: '/_authenticated/ledger/$customerId'
+      path: '/ledger/$customerId'
+      fullPath: '/ledger/$customerId'
+      preLoaderRoute: typeof AuthenticatedLedgerCustomerIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/.mcp/invoke-tool/$tool': {
       id: '/.mcp/invoke-tool/$tool'
       path: '/.mcp/invoke-tool/$tool'
@@ -415,6 +435,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedSuppliersRoute: typeof AuthenticatedSuppliersRoute
   AuthenticatedWholesaleRoute: typeof AuthenticatedWholesaleRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
+  AuthenticatedLedgerCustomerIdRoute: typeof AuthenticatedLedgerCustomerIdRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -430,6 +451,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedSuppliersRoute: AuthenticatedSuppliersRoute,
   AuthenticatedWholesaleRoute: AuthenticatedWholesaleRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+  AuthenticatedLedgerCustomerIdRoute: AuthenticatedLedgerCustomerIdRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
@@ -448,13 +470,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
