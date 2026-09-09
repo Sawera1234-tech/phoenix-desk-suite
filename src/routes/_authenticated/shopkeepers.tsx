@@ -1,16 +1,15 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { AppShell } from "@/components/phoenix/AppShell";
 import { DataTable } from "@/components/phoenix/DataTable";
-import { fmtRs, fmtDate } from "@/lib/format";
+import { fmtRs } from "@/lib/format";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteRecord, logAudit } from "@/lib/audit";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Plus, BookOpen, Pencil, Trash2 } from "lucide-react";
@@ -43,7 +42,6 @@ type Shopkeeper = {
 
 function ShopkeepersPage() {
   const qc = useQueryClient();
-  const [ledgerFor, setLedgerFor] = useState<Shopkeeper | null>(null);
   const [editShopkeeper, setEditShopkeeper] = useState<Shopkeeper | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Shopkeeper | null>(null);
 
@@ -54,6 +52,8 @@ function ShopkeepersPage() {
       if (error) throw error;
       return data as Shopkeeper[];
     },
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   const refresh = () => {
@@ -86,7 +86,19 @@ function ShopkeepersPage() {
           actions={<NewShopkeeperDialog onCreated={refresh} />}
           emptyMessage="No shopkeepers yet."
           columns={[
-            { key: "name", label: "Name" },
+            {
+              key: "name",
+              label: "Name",
+              render: (r) => (
+                <Link
+                  to="/ledger/$customerId"
+                  params={{ customerId: r.id }}
+                  className="font-medium text-primary hover:underline"
+                >
+                  {r.name}
+                </Link>
+              ),
+            },
             { key: "shop_name", label: "Shop" },
             { key: "phone", label: "Phone" },
             { key: "opening_balance", label: "Opening", align: "right", render: (r) => fmtRs(r.opening_balance) },
@@ -106,8 +118,10 @@ function ShopkeepersPage() {
               align: "right",
               render: (r) => (
                 <div className="flex justify-end gap-2">
-                  <Button size="sm" variant="outline" className="h-7 gap-1" onClick={() => setLedgerFor(r)}>
-                    <BookOpen className="h-3 w-3" /> Ledger
+                  <Button asChild size="sm" variant="outline" className="h-7 gap-1">
+                    <Link to="/ledger/$customerId" params={{ customerId: r.id }}>
+                      <BookOpen className="h-3 w-3" /> Ledger
+                    </Link>
                   </Button>
                   <Button size="sm" variant="secondary" className="h-7 gap-1" onClick={() => setEditShopkeeper(r)}>
                     <Pencil className="h-3 w-3" /> Edit
@@ -122,7 +136,6 @@ function ShopkeepersPage() {
         />
       </div>
 
-      <LedgerDialog shopkeeper={ledgerFor} onClose={() => setLedgerFor(null)} onEntryAdded={refresh} />
       <EditShopkeeperDialog shopkeeper={editShopkeeper} onClose={() => setEditShopkeeper(null)} onUpdated={refresh} />
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
@@ -313,105 +326,6 @@ function NewShopkeeperDialog({ onCreated }: { onCreated: () => void }) {
           <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
           <Button onClick={() => create.mutate()} disabled={!form.name || create.isPending}>{create.isPending ? "Saving…" : "Create"}</Button>
         </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function LedgerDialog({ shopkeeper, onClose, onEntryAdded }: { shopkeeper: Shopkeeper | null; onClose: () => void; onEntryAdded: () => void }) {
-  const qc = useQueryClient();
-  const [entryType, setEntryType] = useState("credit");
-  const [amount, setAmount] = useState("");
-  const [description, setDescription] = useState("");
-
-  const { data: entries = [] } = useQuery({
-    queryKey: ["ledger", shopkeeper?.id],
-    queryFn: async () => {
-      if (!shopkeeper) return [];
-      const { data, error } = await supabase
-        .from("ledger_entries")
-        .select("*")
-        .eq("shopkeeper_id", shopkeeper.id)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!shopkeeper,
-  });
-
-  const add = useMutation({
-    mutationFn: async () => {
-      if (!shopkeeper) return;
-      const { error } = await supabase.from("ledger_entries").insert({
-        shopkeeper_id: shopkeeper.id,
-        entry_type: entryType,
-        amount: Number(amount) || 0,
-        description: description || null,
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success("Entry added");
-      setAmount(""); setDescription("");
-      qc.invalidateQueries({ queryKey: ["ledger", shopkeeper?.id] });
-      onEntryAdded();
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  return (
-    <Dialog open={!!shopkeeper} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>{shopkeeper?.name} — Ledger</DialogTitle>
-          <div className="text-[12px] text-muted-foreground">
-            Current balance: <span className="font-semibold text-foreground">{fmtRs(shopkeeper?.current_balance)}</span>
-          </div>
-        </DialogHeader>
-
-        <div className="grid grid-cols-4 gap-2 rounded-lg border border-border bg-muted/30 p-3">
-          <Select value={entryType} onValueChange={setEntryType}>
-            <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="credit">Credit (sale on account)</SelectItem>
-              <SelectItem value="payment">Payment received</SelectItem>
-              <SelectItem value="debit">Debit / Adjustment</SelectItem>
-            </SelectContent>
-          </Select>
-          <Input placeholder="Amount" type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="h-9" />
-          <Input placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} className="h-9 col-span-1" />
-          <Button onClick={() => add.mutate()} disabled={!amount || add.isPending} className="h-9">Add entry</Button>
-        </div>
-
-        <div className="max-h-[380px] overflow-auto rounded-lg border border-border">
-          <table className="w-full text-[13px]">
-            <thead className="sticky top-0 bg-muted/70 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-              <tr>
-                <th className="px-3 py-2">Date</th>
-                <th className="px-3 py-2">Type</th>
-                <th className="px-3 py-2">Description</th>
-                <th className="px-3 py-2 text-right">Amount</th>
-                <th className="px-3 py-2 text-right">Balance</th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((e, i) => (
-                <tr key={e.id} className={i % 2 === 1 ? "bg-muted/20" : ""}>
-                  <td className="px-3 py-2 text-muted-foreground">{fmtDate(e.entry_date)}</td>
-                  <td className="px-3 py-2 capitalize">{e.entry_type}</td>
-                  <td className="px-3 py-2">{e.description ?? "—"}</td>
-                  <td className="px-3 py-2 text-right font-semibold tabular-nums">{fmtRs(e.amount)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{fmtRs(e.balance_after)}</td>
-                </tr>
-              ))}
-              {entries.length === 0 && (
-                <tr><td colSpan={5} className="px-3 py-12 text-center text-muted-foreground">No entries yet.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <DialogFooter><Button variant="outline" onClick={onClose}>Close</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   );
