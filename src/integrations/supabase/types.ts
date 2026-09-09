@@ -693,6 +693,56 @@ export type Database = {
         }
         Relationships: []
       }
+      supplier_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          id: string
+          method: string
+          notes: string | null
+          payment_date: string
+          payment_no: string
+          reference: string | null
+          supplier_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          method?: string
+          notes?: string | null
+          payment_date?: string
+          payment_no?: string
+          reference?: string | null
+          supplier_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          method?: string
+          notes?: string | null
+          payment_date?: string
+          payment_no?: string
+          reference?: string | null
+          supplier_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_payments_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       suppliers: {
         Row: {
           address: string | null
@@ -701,6 +751,7 @@ export type Database = {
           is_active: boolean
           name: string
           notes: string | null
+          opening_balance: number
           phone: string | null
           updated_at: string
         }
@@ -711,6 +762,7 @@ export type Database = {
           is_active?: boolean
           name: string
           notes?: string | null
+          opening_balance?: number
           phone?: string | null
           updated_at?: string
         }
@@ -721,6 +773,7 @@ export type Database = {
           is_active?: boolean
           name?: string
           notes?: string | null
+          opening_balance?: number
           phone?: string | null
           updated_at?: string
         }
