@@ -24,8 +24,10 @@ import { Route as AuthenticatedDemandListRouteImport } from './routes/_authentic
 import { Route as AuthenticatedDailyUsageRouteImport } from './routes/_authenticated/daily-usage'
 import { Route as AuthenticatedCategoriesRouteImport } from './routes/_authenticated/categories'
 import { Route as AuthenticatedBrandsRouteImport } from './routes/_authenticated/brands'
+import { Route as AuthenticatedAnalyticsRouteImport } from './routes/_authenticated/analytics'
 import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
 import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
+import { Route as AuthenticatedSupplierLedgerSupplierIdRouteImport } from './routes/_authenticated/supplier-ledger.$supplierId'
 import { Route as AuthenticatedLedgerCustomerIdRouteImport } from './routes/_authenticated/ledger.$customerId'
 import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
@@ -105,6 +107,11 @@ const AuthenticatedBrandsRoute = AuthenticatedBrandsRouteImport.update({
   path: '/brands',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedAnalyticsRoute = AuthenticatedAnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const Char91DotwellKnownChar93OauthProtectedResourceRoute =
   Char91DotwellKnownChar93OauthProtectedResourceRouteImport.update({
     id: '/.well-known/oauth-protected-resource',
@@ -116,6 +123,12 @@ const Char91DotmcpChar93ListToolsRoute =
     id: '/.mcp/list-tools',
     path: '/.mcp/list-tools',
     getParentRoute: () => rootRouteImport,
+  } as any)
+const AuthenticatedSupplierLedgerSupplierIdRoute =
+  AuthenticatedSupplierLedgerSupplierIdRouteImport.update({
+    id: '/supplier-ledger/$supplierId',
+    path: '/supplier-ledger/$supplierId',
+    getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedLedgerCustomerIdRoute =
   AuthenticatedLedgerCustomerIdRouteImport.update({
@@ -141,6 +154,7 @@ export interface FileRoutesByFullPath {
   '/mcp': typeof McpRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  '/analytics': typeof AuthenticatedAnalyticsRoute
   '/brands': typeof AuthenticatedBrandsRoute
   '/categories': typeof AuthenticatedCategoriesRoute
   '/daily-usage': typeof AuthenticatedDailyUsageRoute
@@ -155,12 +169,14 @@ export interface FileRoutesByFullPath {
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/ledger/$customerId': typeof AuthenticatedLedgerCustomerIdRoute
+  '/supplier-ledger/$supplierId': typeof AuthenticatedSupplierLedgerSupplierIdRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  '/analytics': typeof AuthenticatedAnalyticsRoute
   '/brands': typeof AuthenticatedBrandsRoute
   '/categories': typeof AuthenticatedCategoriesRoute
   '/daily-usage': typeof AuthenticatedDailyUsageRoute
@@ -176,6 +192,7 @@ export interface FileRoutesByTo {
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/ledger/$customerId': typeof AuthenticatedLedgerCustomerIdRoute
+  '/supplier-ledger/$supplierId': typeof AuthenticatedSupplierLedgerSupplierIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -184,6 +201,7 @@ export interface FileRoutesById {
   '/mcp': typeof McpRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  '/_authenticated/analytics': typeof AuthenticatedAnalyticsRoute
   '/_authenticated/brands': typeof AuthenticatedBrandsRoute
   '/_authenticated/categories': typeof AuthenticatedCategoriesRoute
   '/_authenticated/daily-usage': typeof AuthenticatedDailyUsageRoute
@@ -199,6 +217,7 @@ export interface FileRoutesById {
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/_authenticated/ledger/$customerId': typeof AuthenticatedLedgerCustomerIdRoute
+  '/_authenticated/supplier-ledger/$supplierId': typeof AuthenticatedSupplierLedgerSupplierIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -208,6 +227,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
+    | '/analytics'
     | '/brands'
     | '/categories'
     | '/daily-usage'
@@ -222,12 +242,14 @@ export interface FileRouteTypes {
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/ledger/$customerId'
+    | '/supplier-ledger/$supplierId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
     | '/mcp'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
+    | '/analytics'
     | '/brands'
     | '/categories'
     | '/daily-usage'
@@ -243,6 +265,7 @@ export interface FileRouteTypes {
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/ledger/$customerId'
+    | '/supplier-ledger/$supplierId'
   id:
     | '__root__'
     | '/_authenticated'
@@ -250,6 +273,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
+    | '/_authenticated/analytics'
     | '/_authenticated/brands'
     | '/_authenticated/categories'
     | '/_authenticated/daily-usage'
@@ -265,6 +289,7 @@ export interface FileRouteTypes {
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/_authenticated/ledger/$customerId'
+    | '/_authenticated/supplier-ledger/$supplierId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -384,6 +409,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBrandsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/analytics': {
+      id: '/_authenticated/analytics'
+      path: '/analytics'
+      fullPath: '/analytics'
+      preLoaderRoute: typeof AuthenticatedAnalyticsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/.well-known/oauth-protected-resource': {
       id: '/.well-known/oauth-protected-resource'
       path: '/.well-known/oauth-protected-resource'
@@ -397,6 +429,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/.mcp/list-tools'
       preLoaderRoute: typeof Char91DotmcpChar93ListToolsRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/supplier-ledger/$supplierId': {
+      id: '/_authenticated/supplier-ledger/$supplierId'
+      path: '/supplier-ledger/$supplierId'
+      fullPath: '/supplier-ledger/$supplierId'
+      preLoaderRoute: typeof AuthenticatedSupplierLedgerSupplierIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/ledger/$customerId': {
       id: '/_authenticated/ledger/$customerId'
@@ -423,6 +462,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAnalyticsRoute: typeof AuthenticatedAnalyticsRoute
   AuthenticatedBrandsRoute: typeof AuthenticatedBrandsRoute
   AuthenticatedCategoriesRoute: typeof AuthenticatedCategoriesRoute
   AuthenticatedDailyUsageRoute: typeof AuthenticatedDailyUsageRoute
@@ -436,9 +476,11 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedWholesaleRoute: typeof AuthenticatedWholesaleRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedLedgerCustomerIdRoute: typeof AuthenticatedLedgerCustomerIdRoute
+  AuthenticatedSupplierLedgerSupplierIdRoute: typeof AuthenticatedSupplierLedgerSupplierIdRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAnalyticsRoute: AuthenticatedAnalyticsRoute,
   AuthenticatedBrandsRoute: AuthenticatedBrandsRoute,
   AuthenticatedCategoriesRoute: AuthenticatedCategoriesRoute,
   AuthenticatedDailyUsageRoute: AuthenticatedDailyUsageRoute,
@@ -452,6 +494,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedWholesaleRoute: AuthenticatedWholesaleRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedLedgerCustomerIdRoute: AuthenticatedLedgerCustomerIdRoute,
+  AuthenticatedSupplierLedgerSupplierIdRoute:
+    AuthenticatedSupplierLedgerSupplierIdRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
