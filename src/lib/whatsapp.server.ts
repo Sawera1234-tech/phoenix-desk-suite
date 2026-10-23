@@ -65,7 +65,7 @@ export interface ComposedInvoice {
   footer: string | null;
 }
 
-const rs = (v: number) => `Rs ${Math.round((Number(v) + Number.EPSILON) * 100) / 100).toLocaleString("en-PK")}`;
+const rs = (v: number) => `Rs ${(Math.round((Number(v) + Number.EPSILON) * 100) / 100).toLocaleString("en-PK")}`;
 
 export function composeInvoiceText(x: ComposedInvoice): string {
   const lines = x.items.map(
