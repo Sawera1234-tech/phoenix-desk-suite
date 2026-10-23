@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -54,6 +55,7 @@ const defaultForm = (): InvoiceFormData => ({
 
 export function NewInvoiceDialog({ open, onOpenChange, initialData }: NewInvoiceDialogProps) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [form, setForm] = useState<InvoiceFormData>(defaultForm);
 
   const { data: shopkeepers = [] } = useQuery({
@@ -87,10 +89,16 @@ export function NewInvoiceDialog({ open, onOpenChange, initialData }: NewInvoice
 
   const mutation = useMutation({
     mutationFn: () => createInvoice(form),
-    onSuccess: () => {
+    onSuccess: (invoice) => {
       invalidateWholesaleQueries(queryClient);
       toast.success("Invoice created successfully");
       onOpenChange(false);
+      // A credit (or partial) sale posts to the customer's ledger account —
+      // open it immediately so the new balance is visible.
+      if (calcInvoiceStatus(invoice.total, invoice.paid) !== "paid") {
+        toast.info("Credit sale — opening customer ledger");
+        navigate({ to: "/ledger/$customerId", params: { customerId: invoice.shopkeeper_id } });
+      }
     },
     onError: (err: Error) => {
       toast.error(err.message || "Failed to create invoice");

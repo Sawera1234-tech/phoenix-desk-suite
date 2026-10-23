@@ -6,6 +6,7 @@ import {
   ClipboardList,
   BookOpen,
   Store,
+  TrendingUp,
   BarChart3,
   Settings,
   Flame,
@@ -37,6 +38,7 @@ const workspace: Item[] = [
 const operations: Item[] = [
   { title: "Market Ledger", icon: BookOpen, to: "/shopkeepers" },
   { title: "Wholesale", icon: Store, to: "/wholesale" },
+  { title: "Profit Analytics", icon: TrendingUp, to: "/analytics" },
   { title: "Reports", icon: BarChart3, to: "/reports" },
   { title: "Settings", icon: Settings, to: "/settings" },
 ];
