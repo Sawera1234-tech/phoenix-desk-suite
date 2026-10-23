@@ -102,3 +102,35 @@ export async function uploadBackupToDrive(
     web_link: file.webViewLink,
   };
 }
+
+export interface DriveBackupDownload {
+  file_id: string;
+  file_name: string;
+  created_at: string;
+  content: string;
+}
+
+/** Downloads the newest snapshot of a cadence from the connected Google Drive. */
+export async function downloadLatestDriveBackup(cadence: string): Promise<DriveBackupDownload> {
+  const folderLabel = cadence.charAt(0).toUpperCase() + cadence.slice(1);
+  const rootId = await ensureFolder(ROOT_FOLDER);
+  const folderId = await ensureFolder(folderLabel, rootId);
+
+  const q = `'${folderId}' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'`;
+  const res = await driveFetch(
+    `/drive/v3/files?q=${encodeURIComponent(q)}&orderBy=${encodeURIComponent("createdTime desc")}` +
+      `&pageSize=1&fields=${encodeURIComponent("files(id,name,createdTime)")}`,
+  );
+  const found = (await res.json()) as { files?: { id: string; name: string; createdTime: string }[] };
+  const file = found.files?.[0];
+  if (!file) {
+    throw new Error(`No ${folderLabel} backup exists on Google Drive yet. Upload a backup first.`);
+  }
+
+  const dl = await driveFetch(`/drive/v3/files/${file.id}?alt=media`);
+  const content = await dl.text();
+  if (!content.trimStart().startsWith("{")) {
+    throw new Error("The downloaded file is not a Project Phoenix backup document.");
+  }
+  return { file_id: file.id, file_name: file.name, created_at: file.createdTime, content };
+}

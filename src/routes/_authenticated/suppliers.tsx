@@ -12,8 +12,11 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Plus } from "lucide-react";
+import { BookOpen, Plus } from "lucide-react";
 import { logAudit } from "@/lib/audit";
+import { Link } from "@tanstack/react-router";
+import { fetchSupplierBalances, supplierLedgerKeys } from "@/lib/supplier-ledger";
+import { fmtRs } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/suppliers")({
   head: () => ({ meta: [{ title: "Suppliers · Project Phoenix" }] }),
@@ -43,6 +46,11 @@ function SuppliersPage() {
     },
   });
 
+  const { data: balances = {} } = useQuery({
+    queryKey: supplierLedgerKeys.balances,
+    queryFn: fetchSupplierBalances,
+  });
+
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["suppliers"] });
     qc.invalidateQueries({ queryKey: ["purchases"] });
@@ -70,6 +78,19 @@ function SuppliersPage() {
             { key: "address", label: "Address" },
             { key: "notes", label: "Notes" },
             {
+              key: "balance",
+              label: "Outstanding",
+              align: "right",
+              render: (r) => {
+                const bal = balances[r.id] ?? 0;
+                return (
+                  <span className={`text-[13px] font-semibold tabular-nums ${bal > 0 ? "text-destructive" : "text-success"}`}>
+                    {fmtRs(bal)}
+                  </span>
+                );
+              },
+            },
+            {
               key: "is_active",
               label: "Status",
               render: (r) => (
@@ -84,20 +105,28 @@ function SuppliersPage() {
               align: "right",
               sortable: false,
               render: (r) => (
-                <RowActions
-                  table="suppliers"
-                  id={r.id}
-                  label={r.name}
-                  onEdit={() => { setEditing(r); setOpen(true); }}
-                  onDeleted={refresh}
-                  fields={[
-                    { label: "Name", value: r.name },
-                    { label: "Phone", value: r.phone ?? "—" },
-                    { label: "Address", value: r.address ?? "—" },
-                    { label: "Notes", value: r.notes ?? "—" },
-                    { label: "Status", value: r.is_active ? "Active" : "Inactive" },
-                  ]}
-                />
+                <div className="flex items-center justify-end gap-1">
+                  <Link to="/supplier-ledger/$supplierId" params={{ supplierId: r.id }}>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Open supplier ledger">
+                      <BookOpen className="h-4 w-4" />
+                    </Button>
+                  </Link>
+                  <RowActions
+                    table="suppliers"
+                    id={r.id}
+                    label={r.name}
+                    onEdit={() => { setEditing(r); setOpen(true); }}
+                    onDeleted={refresh}
+                    fields={[
+                      { label: "Name", value: r.name },
+                      { label: "Phone", value: r.phone ?? "—" },
+                      { label: "Address", value: r.address ?? "—" },
+                      { label: "Notes", value: r.notes ?? "—" },
+                      { label: "Outstanding", value: fmtRs(balances[r.id] ?? 0) },
+                      { label: "Status", value: r.is_active ? "Active" : "Inactive" },
+                    ]}
+                  />
+                </div>
               ),
             },
           ]}

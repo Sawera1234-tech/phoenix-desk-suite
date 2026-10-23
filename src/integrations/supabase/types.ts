@@ -800,6 +800,99 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_messages: {
+        Row: {
+          body: string | null
+          created_at: string
+          direction: string
+          error: string | null
+          id: string
+          invoice_id: string | null
+          phone: string | null
+          provider_message_id: string | null
+          sent_at: string | null
+          shopkeeper_id: string | null
+          status: string
+          status_updated_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          direction?: string
+          error?: string | null
+          id?: string
+          invoice_id?: string | null
+          phone?: string | null
+          provider_message_id?: string | null
+          sent_at?: string | null
+          shopkeeper_id?: string | null
+          status?: string
+          status_updated_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          direction?: string
+          error?: string | null
+          id?: string
+          invoice_id?: string | null
+          phone?: string | null
+          provider_message_id?: string | null
+          sent_at?: string | null
+          shopkeeper_id?: string | null
+          status?: string
+          status_updated_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_messages_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_messages_shopkeeper_id_fkey"
+            columns: ["shopkeeper_id"]
+            isOneToOne: false
+            referencedRelation: "shopkeepers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_webhook_events: {
+        Row: {
+          delivery_id: string
+          event: string
+          id: string
+          payload: Json
+          processed_at: string | null
+          processing_error: string | null
+          received_at: string
+        }
+        Insert: {
+          delivery_id: string
+          event: string
+          id?: string
+          payload: Json
+          processed_at?: string | null
+          processing_error?: string | null
+          received_at?: string
+        }
+        Update: {
+          delivery_id?: string
+          event?: string
+          id?: string
+          payload?: Json
+          processed_at?: string | null
+          processing_error?: string | null
+          received_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
