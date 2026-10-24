@@ -50,7 +50,7 @@ export const Route = createFileRoute("/api/public/whatsapp/webhook")({
           const { error: insErr } = await admin.from("whatsapp_webhook_events").insert({
             delivery_id: deliveryId,
             event,
-            payload: payload as object,
+            payload: payload as never,
           });
           if (insErr) {
             console.error(`WhatsApp inbox write failed: ${insErr.message}`);
