@@ -158,11 +158,31 @@ function readableSendError(status: number, raw: string, json: { error?: { code?:
   return `WhatsApp send failed [${status}]: ${msg}`;
 }
 
+interface StatusCallback {
+  id?: string;
+  status?: string;
+  timestamp?: string;
+  errors?: { message?: string; title?: string }[];
+}
+interface InboundMessage {
+  id?: string;
+  from?: string;
+  text?: { body?: string };
+}
+interface MetaWebhookValue {
+  statuses?: StatusCallback[];
+  messages?: InboundMessage[];
+  [key: string]: unknown;
+}
+interface MetaWebhookPayload {
+  entry?: { changes?: { value?: MetaWebhookValue }[] }[];
+}
+
 /** Applies a Meta status callback to the outbound message row, monotonically. */
 async function applyStatus(
   admin: Admin,
   providerMessageId: string,
-  s: { status?: string; timestamp?: string; errors?: { message?: string; title?: string }[] },
+  s: Omit<StatusCallback, "id">,
 ): Promise<void> {
   if (!s?.status) return;
   const ts = s.timestamp ? new Date(Number(s.timestamp) * 1000).toISOString() : new Date().toISOString();
@@ -212,8 +232,8 @@ export async function reconcileStatusCallbacks(admin: Admin, providerMessageId: 
     .order("received_at", { ascending: true });
   if (error) throw new Error(error.message);
   for (const ev of events ?? []) {
-    const value = (ev.payload as { entry?: { changes?: { value?: { statuses?: unknown[] } }[] } } | null)?.entry?.[0]?.changes?.[0]?.value;
-    for (const s of (value?.statuses ?? []) as Parameters<typeof applyStatus>[2][]) {
+    const value = (ev.payload as MetaWebhookPayload | null)?.entry?.[0]?.changes?.[0]?.value;
+    for (const s of value?.statuses ?? []) {
       if (s?.id !== providerMessageId) continue;
       await applyStatus(admin, providerMessageId, s);
     }
@@ -226,11 +246,10 @@ export async function processWebhookEvent(
   event: string,
   payload: unknown,
 ): Promise<void> {
-  const value =
-    (payload as { entry?: { changes?: { value?: Record<string, unknown> }[] } } | null)?.entry?.[0]?.changes?.[0]?.value ?? {};
+  const value = (payload as MetaWebhookPayload | null)?.entry?.[0]?.changes?.[0]?.value ?? {};
 
   if (event === "whatsapp.status") {
-    for (const s of (value.statuses ?? []) as Parameters<typeof applyStatus>[2][]) {
+    for (const s of value.statuses ?? []) {
       if (!s?.id) continue;
       await applyStatus(admin, s.id, s);
     }
@@ -238,7 +257,7 @@ export async function processWebhookEvent(
   }
 
   if (event === "whatsapp.message") {
-    const messages = (value.messages ?? []) as { id?: string; from?: string; text?: { body?: string } }[];
+    const messages = value.messages ?? [];
     for (const m of messages) {
       if (!m?.id) continue;
       const phone = digitsOf(m.from);
