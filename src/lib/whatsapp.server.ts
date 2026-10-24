@@ -158,11 +158,31 @@ function readableSendError(status: number, raw: string, json: { error?: { code?:
   return `WhatsApp send failed [${status}]: ${msg}`;
 }
 
+interface StatusCallback {
+  id?: string;
+  status?: string;
+  timestamp?: string;
+  errors?: { message?: string; title?: string }[];
+}
+interface InboundMessage {
+  id?: string;
+  from?: string;
+  text?: { body?: string };
+}
+interface MetaWebhookValue {
+  statuses?: StatusCallback[];
+  messages?: InboundMessage[];
+  [key: string]: unknown;
+}
+interface MetaWebhookPayload {
+  entry?: { changes?: { value?: MetaWebhookValue }[] }[];
+}
+
 /** Applies a Meta status callback to the outbound message row, monotonically. */
 async function applyStatus(
   admin: Admin,
   providerMessageId: string,
-  s: { status?: string; timestamp?: string; errors?: { message?: string; title?: string }[] },
+  s: Omit<StatusCallback, "id">,
 ): Promise<void> {
   if (!s?.status) return;
   const ts = s.timestamp ? new Date(Number(s.timestamp) * 1000).toISOString() : new Date().toISOString();
