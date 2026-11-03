@@ -13,6 +13,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { fmtDateTime } from "@/lib/format";
+import { downloadLatestDriveBackupFn } from "@/lib/drive-backup.functions";
 import {
   backupNow,
   createBackup,
@@ -29,7 +30,7 @@ import {
   type BackupSettings,
   type BackupSlot,
 } from "@/lib/backup";
-import { DatabaseBackup, Download, RotateCcw, Upload, Loader2, CloudUpload } from "lucide-react";
+import { DatabaseBackup, Download, RotateCcw, Upload, Loader2, CloudUpload, CloudDownload } from "lucide-react";
 
 const CADENCES: { key: BackupCadence; label: string }[] = [
   { key: "daily", label: "Daily" },
@@ -130,6 +131,19 @@ export function BackupPanel() {
       toast.success("Backup file downloaded");
     } catch (e) {
       toast.error((e as Error).message || "Download failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleDriveRestore(cadence: BackupCadence) {
+    setBusy(`drive-restore-${cadence}`);
+    try {
+      const res = await downloadLatestDriveBackupFn({ data: { cadence } });
+      setPending(parseBackup(res.content));
+      toast.success(`${cadence.charAt(0).toUpperCase()}${cadence.slice(1)} backup loaded from Google Drive`);
+    } catch (e) {
+      toast.error((e as Error).message || "Could not load the backup from Google Drive");
     } finally {
       setBusy(null);
     }
