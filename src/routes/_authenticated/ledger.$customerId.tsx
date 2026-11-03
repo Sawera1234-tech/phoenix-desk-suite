@@ -14,8 +14,9 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { ArrowLeft, Printer, Plus, Pencil, Trash2, Eye } from "lucide-react";
+import { ArrowLeft, Printer, Plus, Pencil, Trash2, Eye, MessageCircle } from "lucide-react";
 import { fmtRs, fmtDate } from "@/lib/format";
+import { sendInvoiceWhatsAppFn } from "@/lib/whatsapp.functions";
 import { ViewInvoiceDialog } from "@/components/wholesale/ViewInvoiceDialog";
 import { printThermalReceipt, useBusinessProfile } from "@/components/wholesale/ThermalReceipt";
 import { fetchInvoiceWithItems } from "@/lib/wholesale";
@@ -77,6 +78,14 @@ function CustomerAccountPage() {
   const removePayment = useMutation({
     mutationFn: (p: Payment) => deletePayment(p),
     onSuccess: () => { toast.success("Payment deleted — balances recalculated"); setDeleteTarget(null); invalidateLedger(qc); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const sendWhatsApp = useMutation({
+    mutationFn: (invoiceId: string) => sendInvoiceWhatsAppFn({ data: { invoice_id: invoiceId } }),
+    onSuccess: (res) => {
+      toast.success(`Invoice sent to ${customer?.name ?? "customer"} on WhatsApp`, { description: res.note });
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -245,6 +254,16 @@ function CustomerAccountPage() {
                         <div className="flex justify-end gap-2">
                           <Button size="sm" variant="outline" className="h-7 gap-1" onClick={() => setViewInvoice(inv.id)}><Eye className="h-3 w-3" /> View</Button>
                           <Button size="sm" variant="secondary" className="h-7 gap-1" onClick={() => printInvoice(inv.id)}><Printer className="h-3 w-3" /> Print</Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 gap-1"
+                            title={!customer?.phone ? "Add a mobile number to this customer's account first" : "Send invoice to the customer's WhatsApp"}
+                            disabled={!customer?.phone || sendWhatsApp.isPending}
+                            onClick={() => sendWhatsApp.mutate(inv.id)}
+                          >
+                            <MessageCircle className="h-3 w-3" /> {sendWhatsApp.isPending ? "Sending…" : "WhatsApp"}
+                          </Button>
                         </div>
                       </td>
                     </tr>
