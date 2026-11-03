@@ -276,7 +276,7 @@ export function BackupPanel() {
               <p className="mt-1 text-[11.5px] text-muted-foreground">
                 {slot ? fmtDateTime(slot.created_at) : "Will run automatically."}
               </p>
-              <div className="mt-3 flex gap-2">
+              <div className="mt-3 flex flex-wrap gap-2">
                 <Button size="sm" variant="secondary" className="h-7 text-[11.5px]" disabled={busy === c.key} onClick={() => handleBackupNow(c.key)}>
                   {busy === c.key ? "Backing up…" : "Back up now"}
                 </Button>
