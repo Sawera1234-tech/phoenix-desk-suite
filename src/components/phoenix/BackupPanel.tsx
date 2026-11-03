@@ -285,6 +285,15 @@ export function BackupPanel() {
                     <RotateCcw className="h-3 w-3" /> Export
                   </Button>
                 )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 gap-1 text-[11.5px]"
+                  disabled={busy?.startsWith("drive-restore") ?? false}
+                  onClick={() => handleDriveRestore(c.key)}
+                >
+                  <CloudDownload className="h-3 w-3" /> Restore from Drive
+                </Button>
               </div>
             </div>
           );

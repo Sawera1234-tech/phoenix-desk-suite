@@ -14,8 +14,9 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { ArrowLeft, Printer, Plus, Pencil, Trash2, Eye } from "lucide-react";
+import { ArrowLeft, Printer, Plus, Pencil, Trash2, Eye, MessageCircle } from "lucide-react";
 import { fmtRs, fmtDate } from "@/lib/format";
+import { sendInvoiceWhatsAppFn } from "@/lib/whatsapp.functions";
 import { ViewInvoiceDialog } from "@/components/wholesale/ViewInvoiceDialog";
 import { printThermalReceipt, useBusinessProfile } from "@/components/wholesale/ThermalReceipt";
 import { fetchInvoiceWithItems } from "@/lib/wholesale";
